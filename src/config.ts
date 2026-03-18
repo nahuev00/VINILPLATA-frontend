@@ -8,6 +8,7 @@ import {
   Settings,
   MapPin,
   Truck,
+  Tags,
 } from "lucide-react";
 
 export const siteConfig = {
@@ -27,18 +28,18 @@ export const sidebarNavigation = [
     icon: Users,
   },
   {
-    title: "Nueva Orden",
-    href: "/ordenes/nueva",
-    icon: FilePlus,
-  },
-  {
     title: "Órdenes de Trabajo",
     href: "/ordenes",
     icon: Files,
   },
   {
-    title: "Mesas de Producción",
+    title: "Produccion",
     href: "/produccion",
+    icon: MonitorPlay,
+  },
+  {
+    title: "Estaciones",
+    href: "/estaciones",
     icon: MonitorPlay,
   },
   {
@@ -55,6 +56,11 @@ export const sidebarNavigation = [
     title: "Comisionistas",
     href: "/transportes",
     icon: Truck,
+  },
+  {
+    title: "Rubros",
+    href: "/rubros",
+    icon: Tags,
   },
   {
     title: "Configuración",
