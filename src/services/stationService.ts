@@ -10,8 +10,8 @@ export interface Station {
   name: string;
   username: string;
   role: string;
-  printSpeedPerHour: number; // <-- NUEVO CAMPO
   materials?: MaterialShort[];
+  isFinishingStation: boolean;
 }
 
 export interface CreateStationDTO {
@@ -20,6 +20,7 @@ export interface CreateStationDTO {
   password?: string;
   printSpeedPerHour: number; // <-- NUEVO CAMPO
   materialIds?: number[];
+  isFinishingStation: boolean;
 }
 
 export interface UpdateStationDTO {
@@ -28,6 +29,7 @@ export interface UpdateStationDTO {
   password?: string;
   printSpeedPerHour?: number; // <-- NUEVO CAMPO
   materialIds?: number[];
+  isFinishingStation: boolean;
 }
 
 export interface StationWorkload {

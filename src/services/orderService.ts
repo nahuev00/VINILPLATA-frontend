@@ -112,6 +112,20 @@ export interface CreateOrderDTO {
   items: CreateOrderItemDTO[];
 }
 
+export interface UpdateOrderData {
+  title?: string;
+  shippingType?: string;
+  carrierId?: number;
+  cityId?: number;
+  promisedDate?: string;
+  total?: number;
+  electronicPayment?: number;
+  cashPayment?: number;
+  invoiceType?: string;
+  notes?: string;
+  status?: OrderStatus; // O string, dependiendo de cómo lo tengas tipado
+}
+
 const API_URL = "http://localhost:4000/api/orders";
 
 export const getOrders = async ({
@@ -151,4 +165,27 @@ export const updateOrderItem = async (
   });
   if (!res.ok) throw new Error("Error al actualizar el ítem");
   return res.json();
+};
+
+export const updateOrder = async (
+  id: number,
+  data: UpdateOrderData,
+): Promise<Order> => {
+  // Ajusta la ruta '/api/orders' y el método 'axios' o 'fetch' a la configuración de tu proyecto.
+  // Aquí asumo que usas una instancia configurada llamada 'api' (axios). Si usas fetch nativo, adáptalo.
+
+  const response = await fetch(`${API_URL}/${id}`, {
+    method: "PATCH", // o 'PUT', según lo hayas definido en tu router de Express
+    headers: {
+      "Content-Type": "application/json",
+      // 'Authorization': `Bearer ${localStorage.getItem('token')}` // Si usas tokens
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    throw new Error("No se pudo actualizar la orden");
+  }
+
+  return response.json();
 };

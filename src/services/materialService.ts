@@ -41,3 +41,16 @@ export const updateMaterial = async (
   if (!res.ok) throw new Error("Error al actualizar el material");
   return res.json();
 };
+
+export const deleteMaterial = async (
+  id: number,
+  data: CreateMaterialDTO,
+): Promise<Material> => {
+  const res = await fetch(`${API_URL}/${id}`, {
+    method: "PUT", // o PATCH dependiendo de tu backend
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Error al actualizar el material");
+  return res.json();
+};
