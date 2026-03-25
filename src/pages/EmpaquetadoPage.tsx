@@ -9,6 +9,9 @@ import {
   AlertTriangle,
   Box,
   Truck,
+  Layers,
+  Scissors,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,6 +20,7 @@ import {
   updateOrderItem,
   updateOrder,
 } from "@/services/orderService";
+import { getMaterials } from "@/services/materialService"; // 👈 IMPORTAMOS LOS MATERIALES
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 
@@ -24,21 +28,25 @@ export const EmpaquetadoPage = () => {
   const { user, logoutUser } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: ordersRes, isLoading } = useQuery({
+  // 1. Traemos las órdenes
+  const { data: ordersRes, isLoading: loadingOrders } = useQuery({
     queryKey: ["orders-packaging"],
     queryFn: () => getOrders({ page: 1, limit: 100 }),
     refetchInterval: 10000,
   });
 
+  // 👇 2. Traemos el catálogo de materiales para poder traducir los IDs 👇
+  const { data: materials, isLoading: loadingMaterials } = useQuery({
+    queryKey: ["materials"],
+    queryFn: getMaterials,
+  });
+
   const updateBulkMut = useMutation({
     mutationFn: async ({ order }: { order: any }) => {
-      // 1. Pasar todos los ítems de esta orden al nuevo estado EMPAQUETADO
       const itemPromises = order.items.map((item: any) =>
         updateOrderItem(item.id, { status: "EMPAQUETADO" }),
       );
       await Promise.all(itemPromises);
-
-      // 2. Cambiar la orden general a TERMINADO (Lista para despachos)
       await updateOrder(order.id, { status: "TERMINADO" });
     },
     onSuccess: () => {
@@ -48,7 +56,12 @@ export const EmpaquetadoPage = () => {
     onError: () => toast.error("Error al empaquetar la orden"),
   });
 
-  if (isLoading)
+  // Función traductora de ID a Nombre
+  const getMaterialName = (id: number) => {
+    return materials?.find((m) => m.id === id)?.name || "Material desconocido";
+  };
+
+  if (loadingOrders || loadingMaterials)
     return (
       <div className="p-8 text-center text-slate-500 font-medium">
         Cargando módulo de empaquetado...
@@ -57,8 +70,6 @@ export const EmpaquetadoPage = () => {
 
   const allOrders = ordersRes?.data || [];
 
-  // Filtramos solo las órdenes que no están ya terminadas ni entregadas
-  // Y que tengan al menos UN ítem en estado REALIZADO
   const ordersToPackage = allOrders.filter(
     (order) =>
       !["TERMINADO", "ENTREGADO", "CANCELADO"].includes(order.status) &&
@@ -113,6 +124,7 @@ export const EmpaquetadoPage = () => {
                 order={order}
                 onPack={() => updateBulkMut.mutate({ order })}
                 isLoading={updateBulkMut.isPending}
+                getMaterialName={getMaterialName} // 👇 PASAMOS LA FUNCIÓN TRADUCTORA
               />
             ))}
           </div>
@@ -125,8 +137,12 @@ export const EmpaquetadoPage = () => {
 // ==========================================
 // TARJETA DE ORDEN A EMPAQUETAR
 // ==========================================
-const OrderPackageCard = ({ order, onPack, isLoading }: any) => {
-  // Lógica: Revisamos si todos los ítems de esta orden están en estado REALIZADO o EMPAQUETADO
+const OrderPackageCard = ({
+  order,
+  onPack,
+  isLoading,
+  getMaterialName,
+}: any) => {
   const isReadyToPack = order.items.every((item: any) =>
     ["REALIZADO", "EMPAQUETADO"].includes(item.status),
   );
@@ -172,33 +188,72 @@ const OrderPackageCard = ({ order, onPack, isLoading }: any) => {
           return (
             <div
               key={item.id}
-              className={`flex items-center gap-3 p-3 rounded-lg border ${
+              className={`flex items-start gap-3 p-3 rounded-lg border ${
                 isDone
-                  ? "bg-white border-slate-200"
+                  ? "bg-white border-slate-200 shadow-sm"
                   : "bg-slate-100 border-slate-300 border-dashed"
               }`}
             >
-              <div className="shrink-0">
+              <div className="shrink-0 pt-0.5">
                 {isDone ? (
-                  <CheckCircle2 className="w-6 h-6 text-purple-500" />
+                  <CheckCircle2 className="w-5 h-5 text-purple-500" />
                 ) : (
-                  <Clock className="w-6 h-6 text-amber-500" />
+                  <Clock className="w-5 h-5 text-amber-500" />
                 )}
               </div>
-              <div className="flex-1 min-w-0">
+
+              <div className="flex-1 min-w-0 space-y-2">
+                {/* Título Principal */}
                 <p
-                  className={`text-sm font-bold truncate ${isDone ? "text-slate-800" : "text-slate-500"}`}
+                  className={`text-sm font-black truncate leading-tight ${isDone ? "text-slate-800" : "text-slate-500"}`}
                 >
                   {item.copies}x {item.fileName || `Renglón ${index + 1}`}
                 </p>
-                <p className="text-xs font-mono text-slate-500">
-                  {item.widthMm}x{item.heightMm}mm
-                </p>
+
+                {/* Info Técnica (Medidas y Material) */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                    {item.widthMm}x{item.heightMm}mm
+                  </span>
+
+                  {/* 👇 USAMOS LA FUNCIÓN TRADUCTORA AQUÍ 👇 */}
+                  <span className="flex items-center gap-1 font-bold text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                    <Layers className="w-3 h-3" />
+                    {getMaterialName(item.materialId)}
+                  </span>
+                </div>
+
+                {/* Terminaciones */}
+                {item.finishing && (
+                  <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-100 p-1.5 rounded text-[11px] text-amber-800">
+                    <Scissors className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
+                    <span className="font-medium leading-tight">
+                      <span className="font-bold">Terminación:</span>{" "}
+                      {item.finishing}
+                    </span>
+                  </div>
+                )}
+
+                {/* Notas Específicas */}
+                {item.notes && (
+                  <div className="flex items-start gap-1.5 bg-white border border-slate-200 p-1.5 rounded text-[11px] text-slate-600 italic shadow-sm">
+                    <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-400" />
+                    <span className="leading-tight">
+                      <span className="font-semibold text-slate-700">
+                        Nota:
+                      </span>{" "}
+                      {item.notes}
+                    </span>
+                  </div>
+                )}
               </div>
+
               {!isDone && (
-                <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded">
-                  {item.status.replace("_", " ")}
-                </span>
+                <div className="shrink-0 pl-2">
+                  <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded uppercase tracking-wider block text-center">
+                    {item.status.replace("_", " ")}
+                  </span>
+                </div>
               )}
             </div>
           );
@@ -206,7 +261,7 @@ const OrderPackageCard = ({ order, onPack, isLoading }: any) => {
       </div>
 
       <div className="p-5 bg-white border-t border-slate-100">
-        <div className="flex items-center gap-2 mb-4 text-sm font-medium text-slate-600 bg-slate-100 p-2 rounded-md">
+        <div className="flex items-center gap-2 mb-4 text-sm font-medium text-slate-600 bg-slate-100 p-2 rounded-md border border-slate-200">
           <Truck className="w-4 h-4 text-blue-500 shrink-0" />
           Envío:{" "}
           <span className="font-bold text-slate-800">

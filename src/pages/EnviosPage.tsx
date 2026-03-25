@@ -1,3 +1,4 @@
+// src/pages/EnviosPage.tsx
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Truck,
@@ -6,8 +7,11 @@ import {
   LogOut,
   PackageCheck,
   User,
-  CalendarDays,
   Receipt,
+  Phone,
+  Printer,
+  Map,
+  Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,15 +23,12 @@ export const EnviosPage = () => {
   const { user, logoutUser } = useAuth();
   const queryClient = useQueryClient();
 
-  // Traemos las órdenes. Filtraremos las TERMINADO en el frontend
-  // (Si tuvieras miles, lo ideal sería filtrar desde el backend pasándole el status a getOrders)
   const { data: ordersRes, isLoading } = useQuery({
     queryKey: ["orders-shipping"],
     queryFn: () => getOrders({ page: 1, limit: 100 }),
-    refetchInterval: 15000, // Refresco cada 15 segundos
+    refetchInterval: 15000,
   });
 
-  // Mutación para marcar la orden como ENTREGADA
   const deliverMut = useMutation({
     mutationFn: async (orderId: number) => {
       await updateOrder(orderId, { status: "ENTREGADO" });
@@ -47,15 +48,12 @@ export const EnviosPage = () => {
     );
 
   const allOrders = ordersRes?.data || [];
-
-  // Filtramos estrictamente las órdenes que están en TERMINADO (empaquetadas y listas)
   const ordersToShip = allOrders.filter(
     (order) => order.status === "TERMINADO",
   );
 
   return (
     <div className="flex flex-col h-screen p-4 sm:p-6 lg:p-8 bg-slate-100">
-      {/* HEADER DE LA ESTACIÓN */}
       <div className="mb-6 bg-teal-950 text-white p-6 rounded-xl shadow-lg flex justify-between items-center shrink-0 border-b-4 border-teal-500">
         <div>
           <h1 className="text-3xl font-black flex items-center gap-3 tracking-wide">
@@ -87,7 +85,6 @@ export const EnviosPage = () => {
         </div>
       </div>
 
-      {/* ÁREA DE TARJETAS */}
       <div className="flex-1 overflow-y-auto pb-8">
         {ordersToShip.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-400">
@@ -125,75 +122,121 @@ const ShippingOrderCard = ({ order, onDeliver, isLoading }: any) => {
   return (
     <div className="bg-white rounded-2xl shadow-md border-2 border-teal-500 overflow-hidden flex flex-col transition-all hover:shadow-lg">
       {/* Cabecera */}
-      <div className="p-5 border-b bg-teal-50 border-teal-100 flex justify-between items-start">
+      <div className="p-4 border-b bg-teal-50 border-teal-100 flex justify-between items-start">
         <div>
-          <span className="text-sm font-black text-teal-700 mb-1 block uppercase tracking-widest">
+          <span className="text-xs font-black text-teal-700 mb-0.5 block uppercase tracking-widest">
             {order.orderNumber}
           </span>
-          <h3 className="text-xl font-black text-slate-900 leading-tight">
-            {order.client.name}
+          <h3 className="text-lg font-black text-slate-900 leading-tight">
+            {order.client?.name}
           </h3>
         </div>
         <div className="text-right">
-          <span className="bg-white px-3 py-1.5 rounded-lg border border-teal-200 font-black text-teal-800 shadow-sm block text-sm">
-            ${order.total.toLocaleString("es-AR")}
+          <span className="bg-white px-2.5 py-1 rounded border border-teal-200 font-black text-teal-800 shadow-sm block text-xs">
+            ${order.total?.toLocaleString("es-AR")}
           </span>
         </div>
       </div>
 
-      {/* Info Logística y Cliente */}
-      <div className="p-5 flex-1 bg-white space-y-4">
-        {/* Etiqueta de Envío Grande */}
-        <div
-          className={`p-3 rounded-lg border-2 flex items-center gap-3 ${
-            isRetiro
-              ? "bg-amber-50 border-amber-200 text-amber-800"
-              : "bg-blue-50 border-blue-200 text-blue-800"
-          }`}
-        >
-          <Truck className="w-6 h-6 shrink-0" />
-          <div>
-            <span className="block text-[10px] font-bold uppercase tracking-wider opacity-70">
-              Tipo de Entrega
+      <div className="p-4 flex-1 bg-white space-y-4">
+        {/* 👇 ETIQUETA DE ENVÍO VISUAL 👇 */}
+        <div className="bg-slate-50 rounded-lg border-2 border-dashed border-slate-300 p-4 relative">
+          <div className="absolute top-0 right-0 bg-slate-200 text-slate-500 text-[9px] font-bold px-2 py-0.5 rounded-bl-lg uppercase tracking-widest">
+            Datos Etiqueta
+          </div>
+
+          {/* Método de Envío Destacado */}
+          <div className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-200/60">
+            <Truck
+              className={`w-5 h-5 ${isRetiro ? "text-amber-500" : "text-teal-600"}`}
+            />
+            <span
+              className={`text-sm font-black uppercase tracking-wide ${isRetiro ? "text-amber-700" : "text-teal-700"}`}
+            >
+              {order.shippingType || "A CONVENIR"}
             </span>
-            <span className="block text-lg font-black uppercase tracking-wide leading-none mt-0.5">
-              {order.shippingType || "NO ESPECIFICADO"}
-            </span>
+          </div>
+
+          {/* Info del Cliente y Destino */}
+          <div className="space-y-2.5">
+            <div className="flex items-start gap-2">
+              <User className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-bold text-slate-800 leading-none">
+                  {order.client?.name}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  DNI/CUIT: {order.client?.documentNumber || "S/D"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <Phone className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+              <p className="text-xs font-medium text-slate-700">
+                {order.client?.phone || "Sin teléfono registrado"}
+              </p>
+            </div>
+
+            {!isRetiro && (
+              <>
+                <div className="flex items-start gap-2">
+                  <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                  <p className="text-xs font-medium text-slate-700 leading-tight">
+                    {order.client?.address || "Sin dirección registrada"}
+                  </p>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <Map className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                  <p className="text-xs font-bold text-slate-800 leading-tight">
+                    {order.city?.name || "Localidad no especificada"}
+                  </p>
+                </div>
+
+                <div className="flex items-start gap-2 bg-white p-2 rounded border border-slate-200 shadow-sm mt-2">
+                  <Building2 className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">
+                      Transporte / Expreso
+                    </p>
+                    <p className="text-xs font-black text-indigo-700 leading-none">
+                      {order.carrier?.name || "No asignado"}
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Detalles del cliente / Destino */}
-        <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-2">
-          {!isRetiro && order.client.address && (
-            <div className="flex items-start gap-2 text-sm text-slate-700">
-              <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-              <span className="font-medium">{order.client.address}</span>
-            </div>
-          )}
-          <div className="flex items-center gap-2 text-sm text-slate-700">
-            <User className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="font-medium">
-              Vendedor: {order.seller?.name || "-"}
+        {/* Resumen Administrativo */}
+        <div className="flex items-center justify-between text-[11px] text-slate-600 bg-slate-100 p-2 rounded">
+          <div className="flex items-center gap-1.5">
+            <Receipt className="w-3.5 h-3.5 text-slate-400" />
+            <span>
+              Efvo:{" "}
+              <strong className="text-slate-800">${order.cashPayment}</strong>
             </span>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-slate-700">
-            <Receipt className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="font-medium">
-              Pagos: Efectivo ${order.cashPayment} | Digital $
-              {order.electronicPayment}
+            <span className="text-slate-300">|</span>
+            <span>
+              MP:{" "}
+              <strong className="text-slate-800">
+                ${order.electronicPayment}
+              </strong>
             </span>
           </div>
         </div>
 
         {/* Resumen del paquete */}
         <div>
-          <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-            Contenido verificado ({order.items.length} ítems):
+          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+            Contenido del paquete ({order.items?.length}):
           </h4>
-          <ul className="text-xs text-slate-600 space-y-1.5 max-h-[100px] overflow-y-auto">
-            {order.items.map((item: any, idx: number) => (
+          <ul className="text-[11px] text-slate-600 space-y-1 max-h-[80px] overflow-y-auto pr-2">
+            {order.items?.map((item: any, idx: number) => (
               <li key={item.id} className="flex gap-2 items-center">
-                <span className="font-black text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                <span className="font-black text-slate-700 bg-slate-100 px-1 rounded">
                   {item.copies}x
                 </span>
                 <span className="truncate font-medium">
@@ -205,15 +248,28 @@ const ShippingOrderCard = ({ order, onDeliver, isLoading }: any) => {
         </div>
       </div>
 
-      {/* Botón de Acción Final */}
-      <div className="p-5 bg-teal-50 border-t border-teal-100">
+      {/* Botones de Acción */}
+      <div className="p-4 bg-teal-50 border-t border-teal-100 flex flex-col gap-2">
+        {/* 👇 Botón preparado para la futura generación de PDFs 👇 */}
+        <Button
+          variant="outline"
+          className="w-full h-8 text-[11px] font-bold text-teal-700 border-teal-300 bg-white hover:bg-teal-100"
+          onClick={() =>
+            toast.info(
+              "Funcionalidad de generación de etiquetas PDF próximamente.",
+            )
+          }
+        >
+          <Printer className="w-3.5 h-3.5 mr-2" /> IMPRIMIR ETIQUETA
+        </Button>
+
         <Button
           onClick={onDeliver}
           disabled={isLoading}
-          className="w-full h-16 text-lg font-black bg-teal-600 hover:bg-teal-700 text-white shadow-lg transition-all"
+          className="w-full h-12 text-sm font-black bg-teal-600 hover:bg-teal-700 text-white shadow-md transition-all"
         >
-          <CheckCircle2 className="w-6 h-6 mr-2" />
-          {isRetiro ? "ENTREGAR AL CLIENTE" : "DESPACHAR / SUBIR AL CAMIÓN"}
+          <CheckCircle2 className="w-5 h-5 mr-2" />
+          {isRetiro ? "ENTREGAR AL CLIENTE" : "DESPACHAR AL CAMIÓN"}
         </Button>
       </div>
     </div>

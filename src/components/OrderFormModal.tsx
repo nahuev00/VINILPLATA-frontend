@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import { createOrder } from "@/services/orderService";
 import { getClients } from "@/services/clientService";
 import { getMaterials } from "@/services/materialService";
-import { getStations } from "@/services/stationService";
 import { getCities } from "@/services/cityService";
 import { getCarriers } from "@/services/carrierService";
 import { useAuth } from "@/context/AuthContext";
@@ -25,7 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-// 👇 IMPORTAMOS LAS PIEZAS DE GRUPOS DEL SELECT 👇
 import {
   Select,
   SelectContent,
@@ -37,16 +35,27 @@ import {
 } from "@/components/ui/select";
 import { ComboboxField } from "./ComboboxField";
 
-// --- SCHEMAS ---
+// --- SCHEMAS (Con protección contra strings vacíos) ---
 const orderItemSchema = z.object({
   materialId: z.number().min(1, "Material requerido"),
-  assignedToId: z.number().optional().nullable(),
-  fileName: z.string().optional().nullable(),
+  fileName: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((val) => (val === "" ? null : val)),
   widthMm: z.number().min(1, "Ancho > 0"),
   heightMm: z.number().min(1, "Alto > 0"),
   copies: z.number().min(1, "Mínimo 1 copia"),
-  finishing: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
+  finishing: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((val) => (val === "" ? null : val)),
+  notes: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((val) => (val === "" ? null : val)),
   unitPrice: z.number().min(0),
   subtotal: z.number().min(0),
 });
@@ -54,16 +63,36 @@ const orderItemSchema = z.object({
 const orderSchema = z.object({
   clientId: z.number().min(1, "Cliente requerido"),
   sellerId: z.number(),
-  title: z.string().optional().nullable(),
-  shippingType: z.string().optional().nullable(),
+  title: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((val) => (val === "" ? null : val)),
+  shippingType: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((val) => (val === "" ? null : val)),
   carrierId: z.number().optional().nullable(),
   cityId: z.number().optional().nullable(),
-  promisedDate: z.string().optional().nullable(),
+  promisedDate: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((val) => (val === "" ? null : val)),
   total: z.number().min(0),
   electronicPayment: z.number().min(0),
   cashPayment: z.number().min(0),
-  invoiceType: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
+  invoiceType: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((val) => (val === "" ? null : val)),
+  notes: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((val) => (val === "" ? null : val)),
   items: z.array(orderItemSchema).min(1, "Debe agregar al menos un ítem"),
 });
 
@@ -76,14 +105,8 @@ const OrderItemCard = ({
   register,
   remove,
   setValue,
-  materials,
   groupedMaterials,
-  stations,
 }: any) => {
-  const currentMaterialId = useWatch({
-    control,
-    name: `items.${index}.materialId`,
-  });
   const w = useWatch({ control, name: `items.${index}.widthMm` }) || 0;
   const h = useWatch({ control, name: `items.${index}.heightMm` }) || 0;
   const copies = useWatch({ control, name: `items.${index}.copies` }) || 1;
@@ -96,11 +119,6 @@ const OrderItemCard = ({
   useEffect(() => {
     setValue(`items.${index}.subtotal`, calculatedSubtotal);
   }, [calculatedSubtotal, setValue, index]);
-
-  const compatibleStations =
-    stations?.filter((st: any) =>
-      st.materials?.some((m: any) => m.id === currentMaterialId),
-    ) || [];
 
   return (
     <div className="relative bg-slate-50/50 border border-slate-200 rounded-md p-4 shadow-sm">
@@ -120,8 +138,7 @@ const OrderItemCard = ({
       </span>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-3 mt-4">
-        {/* 👇 SELECTOR DE MATERIAL AGRUPADO 👇 */}
-        <div className="col-span-12 md:col-span-4">
+        <div className="col-span-12 md:col-span-6">
           <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
             Material y Ancho
           </label>
@@ -164,42 +181,7 @@ const OrderItemCard = ({
           />
         </div>
 
-        <div className="col-span-12 md:col-span-4">
-          <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
-            Estación / Máquina
-          </label>
-          <Controller
-            name={`items.${index}.assignedToId`}
-            control={control}
-            render={({ field }) => (
-              <Select
-                value={field.value?.toString() || "unassigned"}
-                onValueChange={(val) =>
-                  field.onChange(val === "unassigned" ? null : Number(val))
-                }
-              >
-                <SelectTrigger className="h-8 bg-white text-sm">
-                  <SelectValue placeholder="Sin asignar" />
-                </SelectTrigger>
-                <SelectContent className="bg-white">
-                  <SelectItem
-                    value="unassigned"
-                    className="text-slate-500 italic"
-                  >
-                    Dejar sin asignar
-                  </SelectItem>
-                  {compatibleStations.map((st: any) => (
-                    <SelectItem key={st.id} value={st.id.toString()}>
-                      {st.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </div>
-
-        <div className="col-span-12 md:col-span-4">
+        <div className="col-span-12 md:col-span-6">
           <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
             Archivo / Ref
           </label>
@@ -209,6 +191,7 @@ const OrderItemCard = ({
             className="h-8 bg-white text-sm"
           />
         </div>
+
         <div className="col-span-6 md:col-span-2">
           <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
             Ancho (mm)
@@ -280,7 +263,7 @@ const OrderItemCard = ({
         </div>
         <div className="col-span-6 md:col-span-4">
           <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
-            Subtotal Renglón ($)
+            Subtotal ($)
           </label>
           <Input
             type="number"
@@ -316,10 +299,6 @@ export const OrderFormModal = ({
     queryKey: ["materials"],
     queryFn: getMaterials,
   });
-  const { data: stations } = useQuery({
-    queryKey: ["stations"],
-    queryFn: getStations,
-  });
   const { data: cities } = useQuery({
     queryKey: ["cities"],
     queryFn: getCities,
@@ -329,7 +308,6 @@ export const OrderFormModal = ({
     queryFn: getCarriers,
   });
 
-  // 👇 AGRUPAMOS LOS MATERIALES AQUÍ, UNA SOLA VEZ 👇
   const groupedMaterials = useMemo(() => {
     if (!materials) return {};
     return materials.reduce((acc: any, mat: any) => {
@@ -389,6 +367,7 @@ export const OrderFormModal = ({
     mutationFn: createOrder,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["orders-production"] });
       toast.success("Orden creada con éxito");
       onClose();
       reset({
@@ -528,6 +507,8 @@ export const OrderFormModal = ({
                             Expreso / Comisionista
                           </SelectItem>
                           <SelectItem value="CORREO">Correo</SelectItem>
+                          {/* 👇 AHORA SÍ ESTÁ LA OPCIÓN DE RGE 👇 */}
+                          <SelectItem value="RGE">RGE</SelectItem>
                         </SelectContent>
                       </Select>
                     )}
@@ -588,9 +569,7 @@ export const OrderFormModal = ({
                   register={register}
                   remove={remove}
                   setValue={setValue}
-                  materials={materials}
-                  groupedMaterials={groupedMaterials} // 👇 PASAMOS LA DATA AGRUPADA
-                  stations={stations}
+                  groupedMaterials={groupedMaterials}
                 />
               ))}
             </div>

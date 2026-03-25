@@ -14,6 +14,7 @@ import {
   Box,
   Truck,
   MapPin,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,11 +33,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { OrderItemDetailsModal } from "@/components/OrderItemDetailsModal";
+import { OrderFormModal } from "@/components/OrderFormModal"; // 👈 IMPORTAMOS EL MODAL
 
 export const ProduccionPage = () => {
   const queryClient = useQueryClient();
 
   const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false); // 👈 ESTADO DEL MODAL
 
   const { data: stations, isLoading: loadingStations } = useQuery({
     queryKey: ["stations-list"],
@@ -94,10 +97,7 @@ export const ProduccionPage = () => {
   );
   const unassignedItems = pendingItems.filter((item) => !item.assignedToId);
 
-  // La bandeja de empaque solo muestra lo que está REALIZADO (Aún no fue empaquetado)
   const packagingItems = allItems.filter((item) => item.status === "REALIZADO");
-
-  // Las órdenes de la bandeja de despachos
   const shippingOrders = allOrders.filter(
     (order) => order.status === "TERMINADO",
   );
@@ -114,13 +114,22 @@ export const ProduccionPage = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)]">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <Printer className="w-6 h-6 text-blue-600" /> Tablero de Producción
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Gestión de colas de impresión, empaque y despachos.
-        </p>
+      {/* 👇 CABECERA CON EL NUEVO BOTÓN 👇 */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <Printer className="w-6 h-6 text-blue-600" /> Tablero de Producción
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Gestión de colas de impresión, empaque y despachos.
+          </p>
+        </div>
+        <Button
+          onClick={() => setIsFormOpen(true)}
+          className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm shrink-0"
+        >
+          <Plus className="w-4 h-4 mr-2" /> Nueva Orden
+        </Button>
       </div>
 
       <div className="flex-1 overflow-x-auto pb-4">
@@ -195,12 +204,18 @@ export const ProduccionPage = () => {
         </div>
       </div>
 
+      {/* MODALES */}
       <OrderItemDetailsModal
         isOpen={!!selectedItem}
         onClose={() => setSelectedItem(null)}
         item={selectedItem}
         getMaterialName={getMaterialName}
         stations={productionStations}
+      />
+
+      <OrderFormModal
+        isOpen={isFormOpen}
+        onClose={() => setIsFormOpen(false)}
       />
     </div>
   );
@@ -287,7 +302,6 @@ const ShippingOrderCard = ({ order, onDeliver }: any) => {
         )}
       </div>
 
-      {/* 👇 ÍTEMS CON EL NUEVO ESTADO EMPAQUETADO 👇 */}
       <div className="mb-3">
         <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">
           Contenido del paquete ({order.items.length}):

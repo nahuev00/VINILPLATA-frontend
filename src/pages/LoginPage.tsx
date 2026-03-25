@@ -32,6 +32,7 @@ export const LoginPage = () => {
     setIsLoading(true);
     try {
       const response = await login(data);
+
       loginUser(response.user);
       toast.success(`Bienvenido, ${response.user.name}`);
 
