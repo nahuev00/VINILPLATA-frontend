@@ -41,7 +41,9 @@ export interface StationWorkload {
   estimatedHours: number;
 }
 
-const API_URL = "http://localhost:4000/api/users"; // Ajusta si tu ruta es /api/users
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api";
+const API_URL = `${API_BASE_URL}/users`;
 
 export const getStations = async (): Promise<Station[]> => {
   const res = await fetch(`${API_URL}/stations`);

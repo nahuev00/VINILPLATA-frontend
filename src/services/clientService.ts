@@ -76,7 +76,9 @@ export interface CreateClientDTO {
   categoryId?: number | null;
 }
 
-const API_URL = "http://localhost:4000/api/clients"; // Ajusta la ruta a tu backend
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api";
+const API_URL = `${API_BASE_URL}/clients`;
 
 export const getClients = async ({
   page,

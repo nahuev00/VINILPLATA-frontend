@@ -126,7 +126,9 @@ export interface UpdateOrderData {
   status?: OrderStatus; // O string, dependiendo de cómo lo tengas tipado
 }
 
-const API_URL = "http://localhost:4000/api/orders";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api";
+const API_URL = `${API_BASE_URL}/orders`;
 
 export const getOrders = async ({
   page,
@@ -158,7 +160,7 @@ export const updateOrderItem = async (
   itemId: number,
   data: { assignedToId?: number | null; status?: ItemStatus },
 ) => {
-  const res = await fetch(`http://localhost:4000/api/orders/items/${itemId}`, {
+  const res = await fetch(`${API_BASE_URL}/orders/items/${itemId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),

@@ -9,7 +9,9 @@ export interface Material {
 
 export type CreateMaterialDTO = Omit<Material, "id">;
 
-const API_URL = "http://localhost:4000/api/materials"; // Ajusta el puerto si es necesario
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api";
+const API_URL = `${API_BASE_URL}/materials`;
 
 export const getMaterials = async (): Promise<Material[]> => {
   const res = await fetch(API_URL);

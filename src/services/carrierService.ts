@@ -14,10 +14,18 @@ export interface Carrier {
 
 export type CreateCarrierDTO = Omit<Carrier, "id" | "createdAt" | "updatedAt">;
 
-const API_URL = "http://localhost:4000/api/carriers"; // Ajusta la ruta si es necesario
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+const API_URL = `${API_BASE_URL}/carriers`;
 
 export const getCarriers = async (): Promise<Carrier[]> => {
-  const res = await fetch(API_URL);
+  const res = await fetch(API_URL, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
+    },
+  });
   if (!res.ok) throw new Error("Error al obtener los transportes");
   return res.json();
 };
@@ -27,7 +35,10 @@ export const createCarrier = async (
 ): Promise<Carrier> => {
   const res = await fetch(API_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
+    },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error("Error al crear el transporte");

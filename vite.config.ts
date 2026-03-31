@@ -11,6 +11,12 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: ["kind-doors-wait.loca.lt"],
+    allowedHosts: true,
+    proxy: {
+      "/api": {
+        target: "http://localhost:4000", // El puerto donde corre tu backend
+        changeOrigin: true,
+      },
+    },
   },
 });

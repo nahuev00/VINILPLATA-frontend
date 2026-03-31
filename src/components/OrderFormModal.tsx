@@ -93,6 +93,12 @@ const orderSchema = z.object({
     .optional()
     .nullable()
     .transform((val) => (val === "" ? null : val)),
+  invoiceNumber: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((val) => (val === "" ? null : val)),
+  isPaid: z.boolean().default(false),
   items: z.array(orderItemSchema).min(1, "Debe agregar al menos un ítem"),
 });
 
@@ -332,6 +338,7 @@ export const OrderFormModal = ({
       total: 0,
       electronicPayment: 0,
       cashPayment: 0,
+      isPaid: false,
       items: [
         { widthMm: 0, heightMm: 0, copies: 1, unitPrice: 0, subtotal: 0 },
       ],
@@ -375,6 +382,7 @@ export const OrderFormModal = ({
         total: 0,
         electronicPayment: 0,
         cashPayment: 0,
+        isPaid: false,
         items: [
           { widthMm: 0, heightMm: 0, copies: 1, unitPrice: 0, subtotal: 0 },
         ],
@@ -385,11 +393,21 @@ export const OrderFormModal = ({
   });
 
   const onSubmit = (data: OrderFormValues) => {
+    let fechaCorregida = null;
+    if (data.promisedDate) {
+      fechaCorregida = new Date(data.promisedDate).toISOString();
+    }
+
     const itemsFormateados = data.items.map((item) => ({
       ...item,
       areaM2: ((item.widthMm * item.heightMm) / 1000000) * item.copies,
     }));
-    createMut.mutate({ ...data, items: itemsFormateados });
+
+    createMut.mutate({
+      ...data,
+      promisedDate: fechaCorregida,
+      items: itemsFormateados,
+    });
   };
 
   return (
@@ -440,14 +458,26 @@ export const OrderFormModal = ({
                   )}
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 mb-1 block">
-                    Fecha Prometida
-                  </label>
+                  <div className="flex justify-between items-end mb-1">
+                    <label className="text-xs font-semibold text-slate-700 block">
+                      Fecha Prometida
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setValue("promisedDate", "")}
+                      className="text-[10px] text-blue-600 hover:underline font-semibold"
+                    >
+                      Limpiar fecha
+                    </button>
+                  </div>
                   <Input
-                    type="date"
+                    type="datetime-local"
                     {...register("promisedDate")}
                     className="h-9 bg-white"
                   />
+                  <span className="text-[10px] text-slate-400 mt-1 block italic">
+                    Dejar vacío para "A convenir"
+                  </span>
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs font-semibold text-slate-700 mb-1 block">
@@ -507,7 +537,6 @@ export const OrderFormModal = ({
                             Expreso / Comisionista
                           </SelectItem>
                           <SelectItem value="CORREO">Correo</SelectItem>
-                          {/* 👇 AHORA SÍ ESTÁ LA OPCIÓN DE RGE 👇 */}
                           <SelectItem value="RGE">RGE</SelectItem>
                         </SelectContent>
                       </Select>
@@ -585,8 +614,8 @@ export const OrderFormModal = ({
               <Banknote className="w-4 h-4 text-blue-600" /> Facturación y
               Observaciones
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div>
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+              <div className="md:col-span-2">
                 <label className="text-xs font-semibold text-slate-700 mb-1 block">
                   Tipo Factura
                 </label>
@@ -610,7 +639,34 @@ export const OrderFormModal = ({
                   )}
                 />
               </div>
-              <div>
+
+              <div className="md:col-span-2">
+                <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                  N° Factura (Opcional)
+                </label>
+                <Input
+                  {...register("invoiceNumber")}
+                  placeholder="Ej: A-0001-456"
+                  className="h-9 bg-white"
+                />
+              </div>
+
+              <div className="md:col-span-2 flex items-center gap-2 pt-6">
+                <input
+                  type="checkbox"
+                  {...register("isPaid")}
+                  id="isPaid"
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                />
+                <label
+                  htmlFor="isPaid"
+                  className="text-xs font-bold text-slate-700 cursor-pointer uppercase"
+                >
+                  ¿Orden Pagada?
+                </label>
+              </div>
+
+              <div className="md:col-span-2">
                 <label className="text-xs font-semibold text-slate-700 mb-1 block">
                   Efectivo ($)
                 </label>
@@ -621,7 +677,7 @@ export const OrderFormModal = ({
                   className="h-9 bg-white"
                 />
               </div>
-              <div>
+              <div className="md:col-span-2">
                 <label className="text-xs font-semibold text-slate-700 mb-1 block">
                   Digital / MP ($)
                 </label>
@@ -632,7 +688,7 @@ export const OrderFormModal = ({
                   className="h-9 bg-white"
                 />
               </div>
-              <div className="col-span-2">
+              <div className="md:col-span-2">
                 <label className="text-xs font-semibold text-slate-700 mb-1 block">
                   Total de la Orden ($)
                 </label>
@@ -643,7 +699,7 @@ export const OrderFormModal = ({
                   className="h-9 bg-slate-100 font-bold text-lg text-blue-700 border-blue-200 pointer-events-none"
                 />
               </div>
-              <div className="md:col-span-5">
+              <div className="md:col-span-6">
                 <label className="text-xs font-semibold text-slate-700 mb-1 block">
                   Observaciones de la Orden
                 </label>

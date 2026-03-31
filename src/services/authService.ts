@@ -21,7 +21,7 @@ export interface LoginResponse {
   user: AuthUser;
 }
 
-const API_URL = "http://localhost:4000/api"; // Ajusta si tu prefijo es distinto
+const API_URL = import.meta.env.VITE_API_BASE_URL;
 
 export const login = async (
   credentials: LoginCredentials,
