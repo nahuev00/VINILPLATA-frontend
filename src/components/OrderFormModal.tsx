@@ -4,10 +4,18 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, useFieldArray, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, FileText, Banknote, Trash2, Printer, Truck } from "lucide-react";
+import {
+  Plus,
+  FileText,
+  Banknote,
+  Trash2,
+  Printer,
+  Truck,
+  Edit3,
+} from "lucide-react";
 import { toast } from "sonner";
 
-import { createOrder } from "@/services/orderService";
+import { createOrder, updateOrder } from "@/services/orderService";
 import { getClients } from "@/services/clientService";
 import { getMaterials } from "@/services/materialService";
 import { getCities } from "@/services/cityService";
@@ -37,6 +45,7 @@ import { ComboboxField } from "./ComboboxField";
 
 // --- SCHEMAS (Con protección contra strings vacíos) ---
 const orderItemSchema = z.object({
+  id: z.number().optional(), // 👇 Aceptamos el ID para saber si es un ítem existente
   materialId: z.number().min(1, "Material requerido"),
   fileName: z
     .string()
@@ -287,9 +296,11 @@ const OrderItemCard = ({
 export const OrderFormModal = ({
   isOpen,
   onClose,
+  orderToEdit, // 👇 RECIBIMOS LA ORDEN A EDITAR 👇
 }: {
   isOpen: boolean;
   onClose: () => void;
+  orderToEdit?: any;
 }) => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -324,6 +335,15 @@ export const OrderFormModal = ({
     }, {});
   }, [materials]);
 
+  const defaultEmptyValues = {
+    sellerId: user?.id || 0,
+    total: 0,
+    electronicPayment: 0,
+    cashPayment: 0,
+    isPaid: false,
+    items: [{ widthMm: 0, heightMm: 0, copies: 1, unitPrice: 0, subtotal: 0 }],
+  };
+
   const {
     register,
     handleSubmit,
@@ -333,16 +353,7 @@ export const OrderFormModal = ({
     setValue,
   } = useForm<OrderFormValues>({
     resolver: zodResolver(orderSchema),
-    defaultValues: {
-      sellerId: user?.id || 0,
-      total: 0,
-      electronicPayment: 0,
-      cashPayment: 0,
-      isPaid: false,
-      items: [
-        { widthMm: 0, heightMm: 0, copies: 1, unitPrice: 0, subtotal: 0 },
-      ],
-    },
+    defaultValues: defaultEmptyValues,
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
@@ -356,9 +367,40 @@ export const OrderFormModal = ({
     setValue("total", calculatedTotal);
   }, [calculatedTotal, setValue]);
 
+  // 👇 AUTOCOMPLETADO PARA EL MODO EDICIÓN 👇
+  useEffect(() => {
+    if (isOpen) {
+      if (orderToEdit) {
+        // Truco para ajustar la fecha a hora local y formatearla para datetime-local
+        let formattedDate = "";
+        if (orderToEdit.promisedDate) {
+          const dateObj = new Date(orderToEdit.promisedDate);
+          const tzOffset = dateObj.getTimezoneOffset() * 60000;
+          formattedDate = new Date(dateObj.getTime() - tzOffset)
+            .toISOString()
+            .slice(0, 16);
+        }
+
+        reset({
+          ...orderToEdit,
+          promisedDate: formattedDate,
+          items: orderToEdit.items.map((i: any) => ({
+            ...i,
+            subtotal: i.unitPrice * i.copies,
+          })),
+        });
+        setClientSearch(orderToEdit.client?.name || "");
+      } else {
+        reset(defaultEmptyValues);
+        setClientSearch("");
+      }
+    }
+  }, [isOpen, orderToEdit, reset]);
+
   const watchedClientId = useWatch({ control, name: "clientId" });
   useEffect(() => {
-    if (watchedClientId && clientsRes?.data) {
+    // Si estamos editando, NO sobrescribimos los datos con los del cliente al cargar
+    if (watchedClientId && clientsRes?.data && !orderToEdit) {
       const selectedClient = clientsRes.data.find(
         (c: any) => c.id === watchedClientId,
       );
@@ -368,28 +410,28 @@ export const OrderFormModal = ({
         setValue("carrierId", selectedClient.carrierId || null);
       }
     }
-  }, [watchedClientId, clientsRes?.data, setValue]);
+  }, [watchedClientId, clientsRes?.data, setValue, orderToEdit]);
+
+  // 👇 MUTACIONES SEPARADAS PARA CREAR Y EDITAR 👇
+  const onSuccessAction = () => {
+    queryClient.invalidateQueries({ queryKey: ["orders"] });
+    queryClient.invalidateQueries({ queryKey: ["orders-production"] });
+    toast.success(
+      orderToEdit ? "Orden actualizada con éxito" : "Orden creada con éxito",
+    );
+    onClose();
+  };
 
   const createMut = useMutation({
     mutationFn: createOrder,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.invalidateQueries({ queryKey: ["orders-production"] });
-      toast.success("Orden creada con éxito");
-      onClose();
-      reset({
-        sellerId: user?.id || 0,
-        total: 0,
-        electronicPayment: 0,
-        cashPayment: 0,
-        isPaid: false,
-        items: [
-          { widthMm: 0, heightMm: 0, copies: 1, unitPrice: 0, subtotal: 0 },
-        ],
-      });
-      setClientSearch("");
-    },
+    onSuccess: onSuccessAction,
     onError: () => toast.error("Error al crear la orden"),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: (data: any) => updateOrder(orderToEdit.id, data),
+    onSuccess: onSuccessAction,
+    onError: () => toast.error("Error al actualizar la orden"),
   });
 
   const onSubmit = (data: OrderFormValues) => {
@@ -403,12 +445,21 @@ export const OrderFormModal = ({
       areaM2: ((item.widthMm * item.heightMm) / 1000000) * item.copies,
     }));
 
-    createMut.mutate({
+    const payload = {
       ...data,
       promisedDate: fechaCorregida,
       items: itemsFormateados,
-    });
+    };
+
+    // Si hay orderToEdit, enviamos un update, sino un create
+    if (orderToEdit) {
+      updateMut.mutate(payload);
+    } else {
+      createMut.mutate(payload);
+    }
   };
+
+  const isPending = createMut.isPending || updateMut.isPending;
 
   return (
     <Dialog
@@ -423,8 +474,16 @@ export const OrderFormModal = ({
     >
       <DialogContent className="sm:max-w-[1100px] bg-white border border-slate-200 shadow-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-slate-900">
-            Nueva Orden de Trabajo
+          <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            {/* 👇 CAMBIO DE TÍTULO SEGÚN MODO 👇 */}
+            {orderToEdit ? (
+              <>
+                <Edit3 className="w-5 h-5 text-blue-600" />
+                Editando Orden: {orderToEdit.orderNumber}
+              </>
+            ) : (
+              "Nueva Orden de Trabajo"
+            )}
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 mt-4">
@@ -723,10 +782,14 @@ export const OrderFormModal = ({
             </Button>
             <Button
               type="submit"
-              disabled={createMut.isPending}
+              disabled={isPending}
               className="bg-blue-600 hover:bg-blue-700 text-white min-w-[140px] shadow-sm"
             >
-              {createMut.isPending ? "Creando..." : "Confirmar Orden"}
+              {isPending
+                ? "Procesando..."
+                : orderToEdit
+                  ? "Guardar Cambios"
+                  : "Confirmar Orden"}
             </Button>
           </div>
         </form>

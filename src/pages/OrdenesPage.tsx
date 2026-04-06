@@ -12,6 +12,7 @@ import {
   Clock,
   Filter,
   Check,
+  Edit3, // 👇 NUEVO ÍCONO IMPORTADO 👇
 } from "lucide-react";
 
 import { getOrders } from "@/services/orderService";
@@ -43,6 +44,10 @@ type PaymentFilter = "ALL" | "PAID" | "UNPAID";
 export const OrdenesPage = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+
+  // 👇 NUEVO ESTADO PARA MANTENER LA ORDEN QUE VAMOS A EDITAR 👇
+  const [orderToEdit, setOrderToEdit] = useState<any | null>(null);
+
   const [searchTerm, setSearchTerm] = useState("");
 
   // ESTADOS DE LOS FILTROS
@@ -149,7 +154,6 @@ export const OrdenesPage = () => {
                   </h5>
                   <div className="space-y-2">
                     {ALL_STATUSES.map((status) => (
-                      // 👇 AQUÍ ESTÁ LA CORRECCIÓN: Agregamos el onClick 👇
                       <div
                         key={status}
                         onClick={() => toggleStatus(status)}
@@ -214,7 +218,10 @@ export const OrdenesPage = () => {
             />
           </div>
           <Button
-            onClick={() => setIsFormOpen(true)}
+            onClick={() => {
+              setOrderToEdit(null); // Aseguramos que sea una orden limpia
+              setIsFormOpen(true);
+            }}
             className="bg-blue-600 hover:bg-blue-700 text-white shrink-0 shadow-sm"
           >
             <Plus className="w-4 h-4 mr-2" /> Nueva Orden
@@ -246,7 +253,7 @@ export const OrdenesPage = () => {
                 <TableHead className="font-bold text-slate-700 text-right">
                   Total
                 </TableHead>
-                <TableHead className="font-bold text-slate-700 text-center w-[80px]">
+                <TableHead className="font-bold text-slate-700 text-center w-[100px]">
                   Acciones
                 </TableHead>
               </TableRow>
@@ -357,14 +364,29 @@ export const OrdenesPage = () => {
                       </TableCell>
 
                       <TableCell className="text-center">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setSelectedOrder(order)}
-                          className="h-8 w-8 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          {/* 👇 BOTÓN DE EDICIÓN 👇 */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setOrderToEdit(order);
+                              setIsFormOpen(true);
+                            }}
+                            className="h-8 w-8 text-amber-600 hover:text-amber-800 hover:bg-amber-50"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setSelectedOrder(order)}
+                            className="h-8 w-8 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -375,9 +397,14 @@ export const OrdenesPage = () => {
         </div>
       </div>
 
+      {/* 👇 PASAMOS orderToEdit AL MODAL 👇 */}
       <OrderFormModal
         isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
+        onClose={() => {
+          setIsFormOpen(false);
+          setOrderToEdit(null); // Limpiamos al cerrar
+        }}
+        orderToEdit={orderToEdit}
       />
       <OrderDetailsModal
         isOpen={!!selectedOrder}

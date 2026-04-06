@@ -282,9 +282,10 @@ export const OrderDetailsModal = ({
               </TableHeader>
               <TableBody>
                 {order.items.map((item: any) => {
-                  const station = stations?.find(
-                    (s: any) => s.id === item.assignedToId,
-                  );
+                  // 👇 CAMBIO: Leemos item.assignedTo que manda el backend, o fallbackeamos al array stations 👇
+                  const station =
+                    item.assignedTo ||
+                    stations?.find((s: any) => s.id === item.assignedToId);
 
                   const isWaitingPackaging = item.status === "REALIZADO";
                   const isPackagedAndReady = item.status === "EMPAQUETADO";
