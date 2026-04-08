@@ -1,3 +1,4 @@
+// src/App.tsx
 import {
   BrowserRouter,
   Routes,
@@ -22,6 +23,8 @@ import { ProduccionPage } from "./pages/ProduccionPage";
 import { EstacionDashboardPage } from "./pages/EstacionDashboardPage";
 import { EmpaquetadoPage } from "./pages/EmpaquetadoPage";
 import { EnviosPage } from "./pages/EnviosPage";
+// 👇 IMPORTAMOS LA NUEVA PÁGINA 👇
+import { FacturacionPage } from "./pages/FacturacionPage";
 
 const Dashboard = () => (
   <div>
@@ -56,7 +59,7 @@ const StationRoutes = () => {
   return <Outlet />;
 };
 
-// 👇 NUEVO GUARDIÁN EMPAQUETADO 👇
+// Guardián EMPAQUETADO
 const PackagerRoutes = () => {
   const { user, isAuthenticated } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
@@ -94,6 +97,8 @@ function App() {
             <Route path="/ciudades" element={<CiudadesPage />} />
             <Route path="/transportes" element={<TransportesPage />} />
             <Route path="/rubros" element={<RubrosPage />} />
+            {/* 👇 NUEVA RUTA REGISTRADA AQUÍ 👇 */}
+            <Route path="/facturacion" element={<FacturacionPage />} />
           </Route>
 
           {/* ZONA ESTACIONES */}
@@ -101,12 +106,12 @@ function App() {
             <Route path="/estacion-panel" element={<EstacionDashboardPage />} />
           </Route>
 
-          {/*  ZONA EMPAQUETADO  */}
+          {/* ZONA EMPAQUETADO  */}
           <Route element={<PackagerRoutes />}>
             <Route path="/empaque" element={<EmpaquetadoPage />} />
           </Route>
 
-          {/*  ZONA ENVIOS  */}
+          {/* ZONA ENVIOS  */}
           <Route element={<ShipperRoutes />}>
             <Route path="/envios" element={<EnviosPage />} />
           </Route>

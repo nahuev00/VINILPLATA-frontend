@@ -205,7 +205,8 @@ export const OrderDetailsModal = ({
               <Banknote className="w-3 h-3" /> Tipo / Pagos
             </span>
             <span className="text-xs font-bold text-indigo-700 block mt-1 uppercase">
-              Factura {order.invoiceType || "N/A"}
+              {/* 👇 CAMBIO: Leemos order.invoiceType?.name 👇 */}
+              Factura {order.invoiceType?.name || "N/A"}
             </span>
             <span className="text-[10px] text-slate-500">
               E: ${order.cashPayment} | D: ${order.electronicPayment}
@@ -282,7 +283,6 @@ export const OrderDetailsModal = ({
               </TableHeader>
               <TableBody>
                 {order.items.map((item: any) => {
-                  // 👇 CAMBIO: Leemos item.assignedTo que manda el backend, o fallbackeamos al array stations 👇
                   const station =
                     item.assignedTo ||
                     stations?.find((s: any) => s.id === item.assignedToId);

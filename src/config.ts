@@ -63,6 +63,11 @@ export const sidebarNavigation = [
     icon: Tags,
   },
   {
+    title: "Tipos de Facturacion",
+    href: "/facturacion",
+    icon: Tags,
+  },
+  {
     title: "Configuración",
     href: "/configuracion",
     icon: Settings,

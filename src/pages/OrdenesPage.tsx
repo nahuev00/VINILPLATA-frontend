@@ -12,7 +12,7 @@ import {
   Clock,
   Filter,
   Check,
-  Edit3, // 👇 NUEVO ÍCONO IMPORTADO 👇
+  Edit3,
 } from "lucide-react";
 
 import { getOrders } from "@/services/orderService";
@@ -37,20 +37,15 @@ import { OrderDetailsModal } from "@/components/OrderDetailsModal";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { useDebounce } from "@/hooks/useDebounce";
 
-// Constantes para los filtros
 const ALL_STATUSES = ["EN_PRODUCCION", "TERMINADO", "ENTREGADO", "CANCELADO"];
 type PaymentFilter = "ALL" | "PAID" | "UNPAID";
 
 export const OrdenesPage = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
-
-  // 👇 NUEVO ESTADO PARA MANTENER LA ORDEN QUE VAMOS A EDITAR 👇
   const [orderToEdit, setOrderToEdit] = useState<any | null>(null);
-
   const [searchTerm, setSearchTerm] = useState("");
 
-  // ESTADOS DE LOS FILTROS
   const [statusFilter, setStatusFilter] = useState<string[]>([
     "EN_PRODUCCION",
     "TERMINADO",
@@ -67,21 +62,15 @@ export const OrdenesPage = () => {
 
   const orders = ordersRes?.data || [];
 
-  // LÓGICA DE FILTRADO EN EL FRONTEND
   const filteredOrders = useMemo(() => {
     return orders.filter((order: any) => {
-      // 1. Filtro por Estado de Producción
       if (!statusFilter.includes(order.status)) return false;
-
-      // 2. Filtro por Estado de Pago
       if (paymentFilter === "PAID" && !order.isPaid) return false;
       if (paymentFilter === "UNPAID" && order.isPaid) return false;
-
       return true;
     });
   }, [orders, statusFilter, paymentFilter]);
 
-  // Funciones auxiliares para el panel de filtros
   const toggleStatus = (status: string) => {
     setStatusFilter((prev) =>
       prev.includes(status)
@@ -99,7 +88,6 @@ export const OrdenesPage = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)]">
-      {/* HEADER Y BUSCADOR */}
       <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -111,7 +99,6 @@ export const OrdenesPage = () => {
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          {/* BOTÓN Y PANEL DE FILTROS */}
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -147,7 +134,6 @@ export const OrdenesPage = () => {
                   </button>
                 </div>
 
-                {/* Filtro de Estados */}
                 <div>
                   <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                     Estado de la Orden
@@ -178,7 +164,6 @@ export const OrdenesPage = () => {
                   </div>
                 </div>
 
-                {/* Filtro de Pagos */}
                 <div>
                   <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 pt-2 border-t border-slate-100">
                     Estado de Cobro
@@ -219,7 +204,7 @@ export const OrdenesPage = () => {
           </div>
           <Button
             onClick={() => {
-              setOrderToEdit(null); // Aseguramos que sea una orden limpia
+              setOrderToEdit(null);
               setIsFormOpen(true);
             }}
             className="bg-blue-600 hover:bg-blue-700 text-white shrink-0 shadow-sm"
@@ -229,7 +214,6 @@ export const OrdenesPage = () => {
         </div>
       </div>
 
-      {/* TABLA PRINCIPAL */}
       <div className="flex-1 overflow-hidden bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col">
         <div className="overflow-y-auto flex-1">
           <Table>
@@ -326,8 +310,9 @@ export const OrdenesPage = () => {
                           <div className="flex items-center gap-1.5">
                             <Receipt className="w-3.5 h-3.5 text-slate-400" />
                             <div className="flex flex-col">
+                              {/* 👇 CAMBIO: Leemos order.invoiceType?.name 👇 */}
                               <span className="text-[10px] font-bold text-slate-500 uppercase leading-none">
-                                Factura {order.invoiceType || ""}
+                                Factura {order.invoiceType?.name || ""}
                               </span>
                               <span className="text-xs font-mono font-bold text-slate-800 leading-tight mt-0.5">
                                 {order.invoiceNumber}
@@ -365,7 +350,6 @@ export const OrdenesPage = () => {
 
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
-                          {/* 👇 BOTÓN DE EDICIÓN 👇 */}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -397,12 +381,11 @@ export const OrdenesPage = () => {
         </div>
       </div>
 
-      {/* 👇 PASAMOS orderToEdit AL MODAL 👇 */}
       <OrderFormModal
         isOpen={isFormOpen}
         onClose={() => {
           setIsFormOpen(false);
-          setOrderToEdit(null); // Limpiamos al cerrar
+          setOrderToEdit(null);
         }}
         orderToEdit={orderToEdit}
       />

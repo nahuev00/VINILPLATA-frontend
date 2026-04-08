@@ -20,6 +20,7 @@ import { getClients } from "@/services/clientService";
 import { getMaterials } from "@/services/materialService";
 import { getCities } from "@/services/cityService";
 import { getCarriers } from "@/services/carrierService";
+import { getInvoiceTypes } from "@/services/invoiceTypeService";
 import { useAuth } from "@/context/AuthContext";
 import { useDebounce } from "@/hooks/useDebounce";
 
@@ -45,7 +46,7 @@ import { ComboboxField } from "./ComboboxField";
 
 // --- SCHEMAS (Con protección contra strings vacíos) ---
 const orderItemSchema = z.object({
-  id: z.number().optional(), // 👇 Aceptamos el ID para saber si es un ítem existente
+  id: z.number().optional(),
   materialId: z.number().min(1, "Material requerido"),
   fileName: z
     .string()
@@ -92,11 +93,7 @@ const orderSchema = z.object({
   total: z.number().min(0),
   electronicPayment: z.number().min(0),
   cashPayment: z.number().min(0),
-  invoiceType: z
-    .string()
-    .optional()
-    .nullable()
-    .transform((val) => (val === "" ? null : val)),
+  invoiceTypeId: z.number().optional().nullable(),
   notes: z
     .string()
     .optional()
@@ -154,7 +151,7 @@ const OrderItemCard = ({
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-3 mt-4">
         <div className="col-span-12 md:col-span-6">
-          <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
+          <label className="text-[11px] font-semibold text-slate-500 mb-1 block uppercase">
             Material y Ancho
           </label>
           <Controller
@@ -165,10 +162,14 @@ const OrderItemCard = ({
                 value={field.value?.toString() || ""}
                 onValueChange={(val) => field.onChange(Number(val))}
               >
-                <SelectTrigger className="h-8 bg-white text-sm">
+                <SelectTrigger className="w-full h-8 bg-white text-sm">
                   <SelectValue placeholder="Elegir material" />
                 </SelectTrigger>
-                <SelectContent className="bg-white max-h-[300px]">
+                {/* 👇 Ajuste de ancho agregado aquí 👇 */}
+                <SelectContent
+                  position="popper"
+                  className="bg-white max-h-[300px] w-[var(--radix-select-trigger-width)]"
+                >
                   {Object.entries(groupedMaterials || {}).map(
                     ([category, mats]: [string, any]) => (
                       <SelectGroup key={category}>
@@ -197,18 +198,18 @@ const OrderItemCard = ({
         </div>
 
         <div className="col-span-12 md:col-span-6">
-          <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
+          <label className="text-[11px] font-semibold text-slate-500 mb-1 block uppercase">
             Archivo / Ref
           </label>
           <Input
             {...register(`items.${index}.fileName`)}
             placeholder="Ej: cartel.pdf"
-            className="h-8 bg-white text-sm"
+            className="h-8 bg-white text-sm placeholder:text-slate-400"
           />
         </div>
 
         <div className="col-span-6 md:col-span-2">
-          <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
+          <label className="text-[11px] font-semibold text-slate-500 mb-1 block uppercase">
             Ancho (mm)
           </label>
           <Input
@@ -218,7 +219,7 @@ const OrderItemCard = ({
           />
         </div>
         <div className="col-span-6 md:col-span-2">
-          <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
+          <label className="text-[11px] font-semibold text-slate-500 mb-1 block uppercase">
             Alto (mm)
           </label>
           <Input
@@ -228,27 +229,27 @@ const OrderItemCard = ({
           />
         </div>
         <div className="col-span-12 md:col-span-4">
-          <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
+          <label className="text-[11px] font-semibold text-slate-500 mb-1 block uppercase">
             Terminaciones (Opc)
           </label>
           <Input
             {...register(`items.${index}.finishing`)}
             placeholder="Ej: Laminado mate"
-            className="h-8 bg-white text-sm"
+            className="h-8 bg-white text-sm placeholder:text-slate-400"
           />
         </div>
         <div className="col-span-12 md:col-span-4">
-          <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
+          <label className="text-[11px] font-semibold text-slate-500 mb-1 block uppercase">
             Notas
           </label>
           <Input
             {...register(`items.${index}.notes`)}
             placeholder="Ej: Cortar al ras"
-            className="h-8 bg-white text-sm"
+            className="h-8 bg-white text-sm placeholder:text-slate-400"
           />
         </div>
         <div className="col-span-6 md:col-span-2">
-          <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
+          <label className="text-[11px] font-semibold text-slate-500 mb-1 block uppercase">
             Copias
           </label>
           <Input
@@ -266,7 +267,7 @@ const OrderItemCard = ({
           </span>
         </div>
         <div className="col-span-6 md:col-span-4">
-          <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
+          <label className="text-[11px] font-semibold text-slate-500 mb-1 block uppercase">
             Precio Unit. ($)
           </label>
           <Input
@@ -277,7 +278,7 @@ const OrderItemCard = ({
           />
         </div>
         <div className="col-span-6 md:col-span-4">
-          <label className="text-[11px] font-semibold text-slate-700 mb-1 block uppercase">
+          <label className="text-[11px] font-semibold text-slate-500 mb-1 block uppercase">
             Subtotal ($)
           </label>
           <Input
@@ -296,7 +297,7 @@ const OrderItemCard = ({
 export const OrderFormModal = ({
   isOpen,
   onClose,
-  orderToEdit, // 👇 RECIBIMOS LA ORDEN A EDITAR 👇
+  orderToEdit,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -323,6 +324,10 @@ export const OrderFormModal = ({
   const { data: carriers } = useQuery({
     queryKey: ["carriers"],
     queryFn: getCarriers,
+  });
+  const { data: invoiceTypes } = useQuery({
+    queryKey: ["invoiceTypes"],
+    queryFn: getInvoiceTypes,
   });
 
   const groupedMaterials = useMemo(() => {
@@ -367,11 +372,10 @@ export const OrderFormModal = ({
     setValue("total", calculatedTotal);
   }, [calculatedTotal, setValue]);
 
-  // 👇 AUTOCOMPLETADO PARA EL MODO EDICIÓN 👇
+  // AUTOCOMPLETADO PARA EL MODO EDICIÓN
   useEffect(() => {
     if (isOpen) {
       if (orderToEdit) {
-        // Truco para ajustar la fecha a hora local y formatearla para datetime-local
         let formattedDate = "";
         if (orderToEdit.promisedDate) {
           const dateObj = new Date(orderToEdit.promisedDate);
@@ -399,7 +403,6 @@ export const OrderFormModal = ({
 
   const watchedClientId = useWatch({ control, name: "clientId" });
   useEffect(() => {
-    // Si estamos editando, NO sobrescribimos los datos con los del cliente al cargar
     if (watchedClientId && clientsRes?.data && !orderToEdit) {
       const selectedClient = clientsRes.data.find(
         (c: any) => c.id === watchedClientId,
@@ -412,7 +415,6 @@ export const OrderFormModal = ({
     }
   }, [watchedClientId, clientsRes?.data, setValue, orderToEdit]);
 
-  // 👇 MUTACIONES SEPARADAS PARA CREAR Y EDITAR 👇
   const onSuccessAction = () => {
     queryClient.invalidateQueries({ queryKey: ["orders"] });
     queryClient.invalidateQueries({ queryKey: ["orders-production"] });
@@ -451,7 +453,6 @@ export const OrderFormModal = ({
       items: itemsFormateados,
     };
 
-    // Si hay orderToEdit, enviamos un update, sino un create
     if (orderToEdit) {
       updateMut.mutate(payload);
     } else {
@@ -475,7 +476,6 @@ export const OrderFormModal = ({
       <DialogContent className="sm:max-w-[1100px] bg-white border border-slate-200 shadow-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            {/* 👇 CAMBIO DE TÍTULO SEGÚN MODO 👇 */}
             {orderToEdit ? (
               <>
                 <Edit3 className="w-5 h-5 text-blue-600" />
@@ -494,7 +494,7 @@ export const OrderFormModal = ({
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">
                     Cliente
                   </label>
                   <Controller
@@ -518,7 +518,7 @@ export const OrderFormModal = ({
                 </div>
                 <div>
                   <div className="flex justify-between items-end mb-1">
-                    <label className="text-xs font-semibold text-slate-700 block">
+                    <label className="text-xs font-semibold text-slate-500 block">
                       Fecha Prometida
                     </label>
                     <button
@@ -539,13 +539,13 @@ export const OrderFormModal = ({
                   </span>
                 </div>
                 <div className="col-span-2">
-                  <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">
                     Título / Referencia
                   </label>
                   <Input
                     {...register("title")}
                     placeholder="Ej: Banners Promo"
-                    className="h-9 bg-white"
+                    className="h-9 bg-white placeholder:text-slate-400"
                   />
                 </div>
               </div>
@@ -557,7 +557,7 @@ export const OrderFormModal = ({
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">
                     Localidad Destino
                   </label>
                   <Controller
@@ -574,7 +574,7 @@ export const OrderFormModal = ({
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">
                     Tipo de Envío
                   </label>
                   <Controller
@@ -585,10 +585,14 @@ export const OrderFormModal = ({
                         value={field.value || ""}
                         onValueChange={field.onChange}
                       >
-                        <SelectTrigger className="h-9 bg-white hover:bg-slate-50 border-slate-200">
+                        <SelectTrigger className="w-full h-9 bg-white hover:bg-slate-50 border-slate-200">
                           <SelectValue placeholder="Ej: RETIRA" />
                         </SelectTrigger>
-                        <SelectContent className="bg-white">
+                        {/* 👇 Ajuste de ancho agregado aquí 👇 */}
+                        <SelectContent
+                          position="popper"
+                          className="bg-white w-[var(--radix-select-trigger-width)]"
+                        >
                           <SelectItem value="RETIRA">
                             Retira por local
                           </SelectItem>
@@ -603,7 +607,7 @@ export const OrderFormModal = ({
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">
                     Transporte
                   </label>
                   <Controller
@@ -675,24 +679,30 @@ export const OrderFormModal = ({
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
               <div className="md:col-span-2">
-                <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">
                   Tipo Factura
                 </label>
                 <Controller
-                  name="invoiceType"
+                  name="invoiceTypeId"
                   control={control}
                   render={({ field }) => (
                     <Select
-                      value={field.value || ""}
-                      onValueChange={field.onChange}
+                      value={field.value?.toString() || ""}
+                      onValueChange={(val) => field.onChange(Number(val))}
                     >
-                      <SelectTrigger className="h-9 bg-white">
-                        <SelectValue placeholder="Ej: A" />
+                      <SelectTrigger className="w-full h-9 bg-white">
+                        <SelectValue placeholder="Seleccionar..." />
                       </SelectTrigger>
-                      <SelectContent className="bg-white">
-                        <SelectItem value="A">Factura A</SelectItem>
-                        <SelectItem value="B">Factura B</SelectItem>
-                        <SelectItem value="X">Comprobante X</SelectItem>
+                      {/* 👇 Ajuste de ancho agregado aquí 👇 */}
+                      <SelectContent
+                        position="popper"
+                        className="bg-white w-[var(--radix-select-trigger-width)]"
+                      >
+                        {invoiceTypes?.map((type: any) => (
+                          <SelectItem key={type.id} value={type.id.toString()}>
+                            {type.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   )}
@@ -700,13 +710,13 @@ export const OrderFormModal = ({
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">
                   N° Factura (Opcional)
                 </label>
                 <Input
                   {...register("invoiceNumber")}
                   placeholder="Ej: A-0001-456"
-                  className="h-9 bg-white"
+                  className="h-9 bg-white placeholder:text-slate-400"
                 />
               </div>
 
@@ -719,14 +729,14 @@ export const OrderFormModal = ({
                 />
                 <label
                   htmlFor="isPaid"
-                  className="text-xs font-bold text-slate-700 cursor-pointer uppercase"
+                  className="text-xs font-bold text-slate-500 cursor-pointer uppercase"
                 >
                   ¿Orden Pagada?
                 </label>
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">
                   Efectivo ($)
                 </label>
                 <Input
@@ -737,7 +747,7 @@ export const OrderFormModal = ({
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">
                   Digital / MP ($)
                 </label>
                 <Input
@@ -748,7 +758,7 @@ export const OrderFormModal = ({
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">
                   Total de la Orden ($)
                 </label>
                 <Input
@@ -759,13 +769,13 @@ export const OrderFormModal = ({
                 />
               </div>
               <div className="md:col-span-6">
-                <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">
                   Observaciones de la Orden
                 </label>
                 <Textarea
                   {...register("notes")}
                   placeholder="Ej: Entregar antes del mediodía"
-                  className="min-h-[60px] resize-none bg-white"
+                  className="min-h-[60px] resize-none bg-white placeholder:text-slate-400"
                 />
               </div>
             </div>
