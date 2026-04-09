@@ -1,5 +1,5 @@
 // src/pages/ProduccionPage.tsx
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Clock,
@@ -15,6 +15,8 @@ import {
   Truck,
   MapPin,
   Plus,
+  Filter,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,19 +29,38 @@ import { getStations } from "@/services/stationService";
 import { getMaterials } from "@/services/materialService";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { OrderItemDetailsModal } from "@/components/OrderItemDetailsModal";
-import { OrderFormModal } from "@/components/OrderFormModal"; // 👈 IMPORTAMOS EL MODAL
+import { OrderFormModal } from "@/components/OrderFormModal";
+
+// Función auxiliar para convertir decimales a HH:mm
+const formatHoursAndMinutes = (decimalHours: number) => {
+  if (isNaN(decimalHours) || decimalHours <= 0) return "0m";
+
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours - hours) * 60);
+
+  if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${minutes}m`;
+};
 
 export const ProduccionPage = () => {
   const queryClient = useQueryClient();
 
   const [selectedItem, setSelectedItem] = useState<any>(null);
-  const [isFormOpen, setIsFormOpen] = useState(false); // 👈 ESTADO DEL MODAL
+  const [isFormOpen, setIsFormOpen] = useState(false);
+
+  const [searchStation, setSearchStation] = useState("");
+  const [hideEmptyStations, setHideEmptyStations] = useState(false);
+  const [stationTypeFilter, setStationTypeFilter] = useState<
+    "ALL" | "PRINT" | "FINISH"
+  >("ALL");
 
   const { data: stations, isLoading: loadingStations } = useQuery({
     queryKey: ["stations-list"],
@@ -79,43 +100,74 @@ export const ProduccionPage = () => {
 
   if (loadingStations || loadingOrders)
     return (
-      <div className="p-8 text-center text-slate-500">
-        Cargando tablero de producción...
+      <div className="p-8 text-center text-slate-500 flex flex-col items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-4" />
+        <span className="font-medium">Cargando tablero de producción...</span>
       </div>
     );
 
   const allOrders = ordersRes?.data || [];
 
-  const allItems = allOrders.flatMap((order) =>
+  const allItems = allOrders.flatMap((order: any) =>
     order.items.map((item: any) => ({ ...item, order })),
   );
 
-  const pendingItems = allItems.filter((item) =>
+  const pendingItems = allItems.filter((item: any) =>
     ["PREIMPRESION", "EN_COLA", "IMPRIMIENDO", "TERMINACIONES"].includes(
       item.status,
     ),
   );
-  const unassignedItems = pendingItems.filter((item) => !item.assignedToId);
-
-  const packagingItems = allItems.filter((item) => item.status === "REALIZADO");
-  const shippingOrders = allOrders.filter(
-    (order) => order.status === "TERMINADO",
+  const unassignedItems = pendingItems.filter(
+    (item: any) => !item.assignedToId,
   );
 
-  const productionStations =
+  const packagingItems = allItems.filter(
+    (item: any) => item.status === "REALIZADO",
+  );
+  const shippingOrders = allOrders.filter(
+    (order: any) => order.status === "TERMINADO",
+  );
+
+  // Clasificación base de estaciones
+  const baseProductionStations =
     stations?.filter((s: any) => s.role === "STATION") || [];
   const packagerStations =
     stations?.filter((s: any) => s.role === "PACKAGER") || [];
   const shipperStations =
     stations?.filter((s: any) => s.role === "SHIPPER") || [];
 
+  // LÓGICA DE FILTRADO DE ESTACIONES DE PRODUCCIÓN
+  const filteredProductionStations = baseProductionStations.filter(
+    (station: any) => {
+      if (
+        searchStation &&
+        !station.name.toLowerCase().includes(searchStation.toLowerCase())
+      ) {
+        return false;
+      }
+      if (stationTypeFilter === "PRINT" && station.isFinishingStation)
+        return false;
+      if (stationTypeFilter === "FINISH" && !station.isFinishingStation)
+        return false;
+      if (hideEmptyStations) {
+        const stationItems = pendingItems.filter(
+          (item: any) => item.assignedToId === station.id,
+        );
+        if (stationItems.length === 0) return false;
+      }
+      return true;
+    },
+  );
+
+  const showUnassigned = !hideEmptyStations || unassignedItems.length > 0;
+
   const getMaterialName = (id: number) =>
-    materials?.find((m) => m.id === id)?.name || "Desconocido";
+    materials?.find((m: any) => m.id === id)?.name || "Desconocido";
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)]">
-      {/* 👇 CABECERA CON EL NUEVO BOTÓN 👇 */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+      {/* CABECERA PRINCIPAL */}
+      <div className="mb-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Printer className="w-6 h-6 text-blue-600" /> Tablero de Producción
@@ -132,24 +184,82 @@ export const ProduccionPage = () => {
         </Button>
       </div>
 
+      {/* BARRA DE FILTROS */}
+      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-center justify-between mb-4 shrink-0">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Buscar estación..."
+              value={searchStation}
+              onChange={(e) => setSearchStation(e.target.value)}
+              className="pl-9 h-9 bg-slate-50 text-sm"
+            />
+          </div>
+
+          <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
+            <button
+              onClick={() => setStationTypeFilter("ALL")}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${stationTypeFilter === "ALL" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              Todas
+            </button>
+            <button
+              onClick={() => setStationTypeFilter("PRINT")}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${stationTypeFilter === "PRINT" ? "bg-blue-100 text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              Impresión
+            </button>
+            <button
+              onClick={() => setStationTypeFilter("FINISH")}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${stationTypeFilter === "FINISH" ? "bg-amber-100 text-amber-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              Corte
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <input
+            type="checkbox"
+            id="hideEmpty"
+            checked={hideEmptyStations}
+            onChange={(e) => setHideEmptyStations(e.target.checked)}
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+          />
+          <label
+            htmlFor="hideEmpty"
+            className="text-sm font-bold text-slate-600 cursor-pointer select-none"
+          >
+            Ocultar estaciones vacías
+          </label>
+        </div>
+      </div>
+
+      {/* ÁREA DE COLUMNAS */}
       <div className="flex-1 overflow-x-auto pb-4">
         <div className="flex gap-6 min-w-max h-full items-start">
-          <StationColumn
-            title="Sin Asignar / En Espera"
-            items={unassignedItems}
-            station={null}
-            materials={materials}
-            stations={productionStations}
-            getMaterialName={getMaterialName}
-            onUpdate={(id: number, data: any) =>
-              updateItemMut.mutate({ id, data })
-            }
-            onOpenDetails={setSelectedItem}
-          />
+          {/* COLUMNA: SIN ASIGNAR */}
+          {showUnassigned && (
+            <StationColumn
+              title="Sin Asignar / En Espera"
+              items={unassignedItems}
+              station={null}
+              materials={materials}
+              stations={baseProductionStations}
+              getMaterialName={getMaterialName}
+              onUpdate={(id: number, data: any) =>
+                updateItemMut.mutate({ id, data })
+              }
+              onOpenDetails={setSelectedItem}
+              allPendingItems={pendingItems} // 👈 Pasamos todos los pendientes
+            />
+          )}
 
-          {productionStations.map((station: any) => {
+          {/* COLUMNAS: ESTACIONES DE PRODUCCIÓN */}
+          {filteredProductionStations.map((station: any) => {
             const stationItems = pendingItems.filter(
-              (item) => item.assignedToId === station.id,
+              (item: any) => item.assignedToId === station.id,
             );
             return (
               <StationColumn
@@ -158,36 +268,42 @@ export const ProduccionPage = () => {
                 items={stationItems}
                 station={station}
                 materials={materials}
-                stations={productionStations}
+                stations={baseProductionStations}
                 getMaterialName={getMaterialName}
                 onUpdate={(id: number, data: any) =>
                   updateItemMut.mutate({ id, data })
                 }
                 onOpenDetails={setSelectedItem}
+                allPendingItems={pendingItems} // 👈 Pasamos todos los pendientes
               />
             );
           })}
 
+          {/* COLUMNA: EMPAQUE */}
           {packagerStations.length > 0 && (
-            <StationColumn
-              key="packagers-pool"
-              title={
-                packagerStations.length === 1
-                  ? packagerStations[0].name
-                  : "Área de Empaque"
-              }
-              items={packagingItems}
-              station={{ ...packagerStations[0], role: "PACKAGER" }}
-              materials={materials}
-              stations={productionStations}
-              getMaterialName={getMaterialName}
-              onUpdate={(id: number, data: any) =>
-                updateItemMut.mutate({ id, data })
-              }
-              onOpenDetails={setSelectedItem}
-            />
+            <div className="pl-6 border-l border-slate-200/60 ml-2 h-full flex gap-6">
+              <StationColumn
+                key="packagers-pool"
+                title={
+                  packagerStations.length === 1
+                    ? packagerStations[0].name
+                    : "Área de Empaque"
+                }
+                items={packagingItems}
+                station={{ ...packagerStations[0], role: "PACKAGER" }}
+                materials={materials}
+                stations={baseProductionStations}
+                getMaterialName={getMaterialName}
+                onUpdate={(id: number, data: any) =>
+                  updateItemMut.mutate({ id, data })
+                }
+                onOpenDetails={setSelectedItem}
+                allPendingItems={pendingItems}
+              />
+            </div>
           )}
 
+          {/* COLUMNA: DESPACHOS */}
           {shipperStations.length > 0 && (
             <ShippingColumn
               title={
@@ -210,7 +326,7 @@ export const ProduccionPage = () => {
         onClose={() => setSelectedItem(null)}
         item={selectedItem}
         getMaterialName={getMaterialName}
-        stations={productionStations}
+        stations={baseProductionStations}
       />
 
       <OrderFormModal
@@ -349,6 +465,7 @@ const StationColumn = ({
   getMaterialName,
   onUpdate,
   onOpenDetails,
+  allPendingItems, // 👈 Recibimos todos los pendientes
 }: any) => {
   const isPackager = station?.role === "PACKAGER";
 
@@ -361,8 +478,8 @@ const StationColumn = ({
   }, 0);
 
   const speed = station?.printSpeedPerHour || 10;
-  const estimatedHours =
-    speed > 0 ? (totalLinearMeters / speed).toFixed(1) : "0.0";
+  const rawHours = speed > 0 ? totalLinearMeters / speed : 0;
+  const displayTime = formatHoursAndMinutes(rawHours);
 
   return (
     <div
@@ -410,7 +527,7 @@ const StationColumn = ({
           <div className="flex items-center gap-3 mt-3">
             <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-md border border-amber-200 shadow-sm">
               <Clock className="w-3.5 h-3.5" />
-              {estimatedHours} Hrs
+              {displayTime}
             </div>
             {!station.isFinishingStation && (
               <div className="flex items-center gap-1.5 text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-md border border-blue-200 shadow-sm">
@@ -463,6 +580,7 @@ const StationColumn = ({
                 getMaterialName={getMaterialName}
                 onUpdate={onUpdate}
                 onOpenDetails={onOpenDetails}
+                allPendingItems={allPendingItems} // 👈 Pasamos a la card
               />
             );
           })
@@ -482,6 +600,7 @@ const JobCard = ({
   getMaterialName,
   onUpdate,
   onOpenDetails,
+  allPendingItems, // 👈 Recibimos los pendientes
 }: any) => {
   const compatibleStations =
     stations?.filter((st: any) =>
@@ -609,38 +728,58 @@ const JobCard = ({
                 <div className="h-px bg-slate-100 my-0.5"></div>
 
                 {compatibleStations.length > 0 ? (
-                  compatibleStations.map((st: any) => (
-                    <Button
-                      key={st.id}
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start h-8 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-100 border border-transparent flex w-full items-center"
-                      onClick={() =>
-                        onUpdate(item.id, {
-                          assignedToId: st.id,
-                          status: "EN_COLA",
-                        })
-                      }
-                    >
-                      <span className="truncate max-w-[120px]">{st.name}</span>
+                  compatibleStations.map((st: any) => {
+                    // 👇 CÁLCULO DE CARGA DE LA ESTACIÓN EN TIEMPO REAL 👇
+                    const stItems =
+                      allPendingItems?.filter(
+                        (i: any) => i.assignedToId === st.id,
+                      ) || [];
+                    const stTotalML = stItems.reduce((sum: number, i: any) => {
+                      const ml =
+                        i.linearMeters > 0
+                          ? i.linearMeters
+                          : ((i.heightMm || 0) / 1000) * (i.copies || 1);
+                      return sum + ml;
+                    }, 0);
+                    const stSpeed = st.printSpeedPerHour || 10;
+                    const stRawHours = stSpeed > 0 ? stTotalML / stSpeed : 0;
+                    const stDisplayTime = formatHoursAndMinutes(stRawHours);
 
-                      <span
-                        className={`ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                          st.isFinishingStation
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-blue-100 text-blue-700"
-                        }`}
+                    return (
+                      <Button
+                        key={st.id}
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start h-8 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-100 border border-transparent flex w-full items-center"
+                        onClick={() =>
+                          onUpdate(item.id, {
+                            assignedToId: st.id,
+                            status: "EN_COLA",
+                          })
+                        }
                       >
-                        {st.isFinishingStation ? "Corte" : "Impresión"}
-                      </span>
-
-                      {st.printSpeedPerHour > 0 && (
-                        <span className="ml-auto text-[9px] text-slate-400 font-mono bg-slate-100 px-1 py-0.5 rounded">
-                          {st.printSpeedPerHour} ML/h
+                        <span className="truncate max-w-[120px]">
+                          {st.name}
                         </span>
-                      )}
-                    </Button>
-                  ))
+
+                        <span
+                          className={`ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                            st.isFinishingStation
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {st.isFinishingStation ? "Corte" : "Impresión"}
+                        </span>
+
+                        {/* 👇 NUEVO BADGE DE TIEMPO EN EL MENÚ 👇 */}
+                        <span className="ml-auto text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1 border border-slate-200">
+                          <Clock className="w-2.5 h-2.5 text-slate-400" />{" "}
+                          {stDisplayTime}
+                        </span>
+                      </Button>
+                    );
+                  })
                 ) : (
                   <div className="text-[10px] text-amber-700 italic px-2 py-2 leading-relaxed border border-amber-200 bg-amber-50 rounded-md shadow-inner">
                     Ninguna otra máquina es compatible con{" "}
