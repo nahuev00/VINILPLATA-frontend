@@ -1,6 +1,6 @@
 // src/pages/OrdenesPage.tsx
-import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo, useEffect } from "react"; // 👈 Agregamos useEffect
+import { useQuery, useQueryClient } from "@tanstack/react-query"; // 👈 Agregamos useQueryClient
 import {
   Plus,
   Search,
@@ -37,10 +37,16 @@ import { OrderDetailsModal } from "@/components/OrderDetailsModal";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { useDebounce } from "@/hooks/useDebounce";
 
+// 👇 IMPORTAMOS EL HOOK DEL SOCKET 👇
+import { useSocket } from "@/context/SocketContext";
+
 const ALL_STATUSES = ["EN_PRODUCCION", "TERMINADO", "ENTREGADO", "CANCELADO"];
 type PaymentFilter = "ALL" | "PAID" | "UNPAID";
 
 export const OrdenesPage = () => {
+  const queryClient = useQueryClient(); // 👈 Instanciamos queryClient
+  const { socket } = useSocket(); // 👈 Instanciamos el socket
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [orderToEdit, setOrderToEdit] = useState<any | null>(null);
@@ -57,8 +63,26 @@ export const OrdenesPage = () => {
   const { data: ordersRes, isLoading } = useQuery({
     queryKey: ["orders", debouncedSearch],
     queryFn: () => getOrders({ page: 1, limit: 100, search: debouncedSearch }),
-    refetchInterval: 30000,
+    // 👇 ELIMINAMOS refetchInterval: 30000 👇
   });
+
+  // 👇 NUEVA MAGIA: ESCUCHADOR EN TIEMPO REAL 👇
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOrdersUpdate = () => {
+      console.log(
+        "🔄 Actualización en tiempo real: Recargando lista de órdenes...",
+      );
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    };
+
+    socket.on("ordersUpdated", handleOrdersUpdate);
+
+    return () => {
+      socket.off("ordersUpdated", handleOrdersUpdate);
+    };
+  }, [socket, queryClient]);
 
   const orders = ordersRes?.data || [];
 
@@ -310,7 +334,6 @@ export const OrdenesPage = () => {
                           <div className="flex items-center gap-1.5">
                             <Receipt className="w-3.5 h-3.5 text-slate-400" />
                             <div className="flex flex-col">
-                              {/* 👇 CAMBIO: Leemos order.invoiceType?.name 👇 */}
                               <span className="text-[10px] font-bold text-slate-500 uppercase leading-none">
                                 Factura {order.invoiceType?.name || ""}
                               </span>

@@ -1,5 +1,5 @@
 // src/pages/ProduccionPage.tsx
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react"; // 👈 IMPORTAMOS useEffect
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Clock,
@@ -15,7 +15,6 @@ import {
   Truck,
   MapPin,
   Plus,
-  Filter,
   Search,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -38,6 +37,9 @@ import {
 import { OrderItemDetailsModal } from "@/components/OrderItemDetailsModal";
 import { OrderFormModal } from "@/components/OrderFormModal";
 
+// 👇 IMPORTAMOS EL HOOK DEL SOCKET 👇
+import { useSocket } from "@/context/SocketContext";
+
 // Función auxiliar para convertir decimales a HH:mm
 const formatHoursAndMinutes = (decimalHours: number) => {
   if (isNaN(decimalHours) || decimalHours <= 0) return "0m";
@@ -52,6 +54,7 @@ const formatHoursAndMinutes = (decimalHours: number) => {
 
 export const ProduccionPage = () => {
   const queryClient = useQueryClient();
+  const { socket } = useSocket(); // 👈 INSTANCIAMOS EL SOCKET
 
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -70,7 +73,7 @@ export const ProduccionPage = () => {
   const { data: ordersRes, isLoading: loadingOrders } = useQuery({
     queryKey: ["orders-production"],
     queryFn: () => getOrders({ page: 1, limit: 100 }),
-    refetchInterval: 15000,
+    // 👇 ELIMINAMOS refetchInterval: 15000 👇
   });
 
   const { data: materials } = useQuery({
@@ -78,10 +81,31 @@ export const ProduccionPage = () => {
     queryFn: getMaterials,
   });
 
+  // 👇 NUEVA MAGIA: ESCUCHADOR EN TIEMPO REAL 👇
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOrdersUpdate = () => {
+      console.log(
+        "🔄 Actualización en tiempo real detectada: Recargando tablero de producción...",
+      );
+      // Forzamos a React Query a traer los datos nuevos al instante
+      queryClient.invalidateQueries({ queryKey: ["orders-production"] });
+    };
+
+    socket.on("ordersUpdated", handleOrdersUpdate);
+
+    return () => {
+      socket.off("ordersUpdated", handleOrdersUpdate);
+    };
+  }, [socket, queryClient]);
+
   const updateItemMut = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       updateOrderItem(id, data),
     onSuccess: () => {
+      // Como el socket avisa a todos (incluyéndote a ti),
+      // la recarga se hace sola, pero mantenemos esta por seguridad
       queryClient.invalidateQueries({ queryKey: ["orders-production"] });
       toast.success("Trabajo reasignado");
     },
@@ -252,7 +276,7 @@ export const ProduccionPage = () => {
                 updateItemMut.mutate({ id, data })
               }
               onOpenDetails={setSelectedItem}
-              allPendingItems={pendingItems} // 👈 Pasamos todos los pendientes
+              allPendingItems={pendingItems}
             />
           )}
 
@@ -274,7 +298,7 @@ export const ProduccionPage = () => {
                   updateItemMut.mutate({ id, data })
                 }
                 onOpenDetails={setSelectedItem}
-                allPendingItems={pendingItems} // 👈 Pasamos todos los pendientes
+                allPendingItems={pendingItems}
               />
             );
           })}
@@ -580,7 +604,7 @@ const StationColumn = ({
                 getMaterialName={getMaterialName}
                 onUpdate={onUpdate}
                 onOpenDetails={onOpenDetails}
-                allPendingItems={allPendingItems} // 👈 Pasamos a la card
+                allPendingItems={allPendingItems}
               />
             );
           })
@@ -729,7 +753,6 @@ const JobCard = ({
 
                 {compatibleStations.length > 0 ? (
                   compatibleStations.map((st: any) => {
-                    // 👇 CÁLCULO DE CARGA DE LA ESTACIÓN EN TIEMPO REAL 👇
                     const stItems =
                       allPendingItems?.filter(
                         (i: any) => i.assignedToId === st.id,
@@ -772,7 +795,6 @@ const JobCard = ({
                           {st.isFinishingStation ? "Corte" : "Impresión"}
                         </span>
 
-                        {/* 👇 NUEVO BADGE DE TIEMPO EN EL MENÚ 👇 */}
                         <span className="ml-auto text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1 border border-slate-200">
                           <Clock className="w-2.5 h-2.5 text-slate-400" />{" "}
                           {stDisplayTime}

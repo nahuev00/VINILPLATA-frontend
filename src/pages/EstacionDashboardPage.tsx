@@ -1,5 +1,5 @@
 // src/pages/EstacionDashboardPage.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react"; // 👈 IMPORTAMOS useEffect
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Play,
@@ -30,13 +30,17 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
+// 👇 IMPORTAMOS EL HOOK DEL SOCKET 👇
+import { useSocket } from "@/context/SocketContext";
+
 export const EstacionDashboardPage = () => {
   const { user, logoutUser } = useAuth();
   const queryClient = useQueryClient();
+  const { socket } = useSocket(); // 👈 INSTANCIAMOS EL SOCKET
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-  // 👇 El estado "En Proceso" depende de si es Impresora o Terminación
+  // El estado "En Proceso" depende de si es Impresora o Terminación
   const activeStatus = user?.isFinishingStation
     ? "TERMINACIONES"
     : "IMPRIMIENDO";
@@ -44,8 +48,26 @@ export const EstacionDashboardPage = () => {
   const { data: ordersRes, isLoading: loadingOrders } = useQuery({
     queryKey: ["orders-station", user?.id],
     queryFn: () => getOrders({ page: 1, limit: 100 }),
-    refetchInterval: 10000,
+    // 👇 ELIMINAMOS refetchInterval: 10000 👇
   });
+
+  // 👇 NUEVA MAGIA: ESCUCHADOR EN TIEMPO REAL 👇
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOrdersUpdate = () => {
+      console.log(
+        "🔄 Actualización en tiempo real: Recargando cola de la estación...",
+      );
+      queryClient.invalidateQueries({ queryKey: ["orders-station"] });
+    };
+
+    socket.on("ordersUpdated", handleOrdersUpdate);
+
+    return () => {
+      socket.off("ordersUpdated", handleOrdersUpdate);
+    };
+  }, [socket, queryClient]);
 
   const { data: materials } = useQuery({
     queryKey: ["materials"],
@@ -60,6 +82,7 @@ export const EstacionDashboardPage = () => {
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       updateOrderItem(id, data),
     onSuccess: () => {
+      // Opcional invalidar aquí, ya que el socket lo hará, pero es buena práctica mantenerlo por si el socket falla
       queryClient.invalidateQueries({ queryKey: ["orders-station"] });
       toast.success("Estado actualizado correctamente");
     },
@@ -93,10 +116,10 @@ export const EstacionDashboardPage = () => {
 
   const myItems = allItems.filter((item) => item.assignedToId === user?.id);
 
-  // 👇 Ambas máquinas reciben sus trabajos en la cola
+  // Ambas máquinas reciben sus trabajos en la cola
   const enColaItems = myItems.filter((item) => item.status === "EN_COLA");
 
-  // 👇 Filtramos la columna derecha por los estados correspondientes
+  // Filtramos la columna derecha por los estados correspondientes
   const activosItems = myItems.filter(
     (item) => item.status === "IMPRIMIENDO" || item.status === "TERMINACIONES",
   );
@@ -116,7 +139,7 @@ export const EstacionDashboardPage = () => {
     }
   };
 
-  // 👇 LÓGICA DE DERIVACIÓN Y FINALIZACIÓN 👇
+  // LÓGICA DE DERIVACIÓN Y FINALIZACIÓN
   const handleFinish = (itemId: number, nextStationId: number | null) => {
     if (nextStationId) {
       // Se deriva a otra máquina: Entra a su "EN_COLA"

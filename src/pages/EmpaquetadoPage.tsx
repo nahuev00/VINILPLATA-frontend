@@ -1,4 +1,5 @@
 // src/pages/EmpaquetadoPage.tsx
+import { useEffect } from "react"; // 👈 IMPORTAMOS useEffect
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Package,
@@ -20,22 +21,42 @@ import {
   updateOrderItem,
   updateOrder,
 } from "@/services/orderService";
-import { getMaterials } from "@/services/materialService"; // 👈 IMPORTAMOS LOS MATERIALES
+import { getMaterials } from "@/services/materialService";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
+
+// 👇 IMPORTAMOS EL HOOK DEL SOCKET 👇
+import { useSocket } from "@/context/SocketContext";
 
 export const EmpaquetadoPage = () => {
   const { user, logoutUser } = useAuth();
   const queryClient = useQueryClient();
+  const { socket } = useSocket(); // 👈 INSTANCIAMOS EL SOCKET
 
   // 1. Traemos las órdenes
   const { data: ordersRes, isLoading: loadingOrders } = useQuery({
     queryKey: ["orders-packaging"],
     queryFn: () => getOrders({ page: 1, limit: 100 }),
-    refetchInterval: 10000,
+    // 👇 ELIMINAMOS refetchInterval: 10000 👇
   });
 
-  // 👇 2. Traemos el catálogo de materiales para poder traducir los IDs 👇
+  // 👇 NUEVA MAGIA: ESCUCHADOR EN TIEMPO REAL 👇
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOrdersUpdate = () => {
+      console.log("🔄 Actualización detectada: Recargando cola de empaque...");
+      queryClient.invalidateQueries({ queryKey: ["orders-packaging"] });
+    };
+
+    socket.on("ordersUpdated", handleOrdersUpdate);
+
+    return () => {
+      socket.off("ordersUpdated", handleOrdersUpdate);
+    };
+  }, [socket, queryClient]);
+
+  // 2. Traemos el catálogo de materiales para poder traducir los IDs
   const { data: materials, isLoading: loadingMaterials } = useQuery({
     queryKey: ["materials"],
     queryFn: getMaterials,
@@ -71,7 +92,7 @@ export const EmpaquetadoPage = () => {
   const allOrders = ordersRes?.data || [];
 
   const ordersToPackage = allOrders.filter(
-    (order) =>
+    (order: any) =>
       !["TERMINADO", "ENTREGADO", "CANCELADO"].includes(order.status) &&
       order.items.some((item: any) => item.status === "REALIZADO"),
   );
@@ -118,13 +139,13 @@ export const EmpaquetadoPage = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {ordersToPackage.map((order) => (
+            {ordersToPackage.map((order: any) => (
               <OrderPackageCard
                 key={order.id}
                 order={order}
                 onPack={() => updateBulkMut.mutate({ order })}
                 isLoading={updateBulkMut.isPending}
-                getMaterialName={getMaterialName} // 👇 PASAMOS LA FUNCIÓN TRADUCTORA
+                getMaterialName={getMaterialName}
               />
             ))}
           </div>
@@ -216,7 +237,6 @@ const OrderPackageCard = ({
                     {item.widthMm}x{item.heightMm}mm
                   </span>
 
-                  {/* 👇 USAMOS LA FUNCIÓN TRADUCTORA AQUÍ 👇 */}
                   <span className="flex items-center gap-1 font-bold text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
                     <Layers className="w-3 h-3" />
                     {getMaterialName(item.materialId)}

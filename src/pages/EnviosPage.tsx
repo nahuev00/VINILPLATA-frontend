@@ -1,4 +1,5 @@
 // src/pages/EnviosPage.tsx
+import { useEffect } from "react"; // 👈 IMPORTAMOS useEffect
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Truck,
@@ -19,21 +20,42 @@ import { getOrders, updateOrder } from "@/services/orderService";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 
+// 👇 IMPORTAMOS EL HOOK DEL SOCKET 👇
+import { useSocket } from "@/context/SocketContext";
+
 export const EnviosPage = () => {
   const { user, logoutUser } = useAuth();
   const queryClient = useQueryClient();
+  const { socket } = useSocket(); // 👈 INSTANCIAMOS EL SOCKET
 
   const { data: ordersRes, isLoading } = useQuery({
     queryKey: ["orders-shipping"],
     queryFn: () => getOrders({ page: 1, limit: 100 }),
-    refetchInterval: 15000,
+    // 👇 ELIMINAMOS refetchInterval: 15000 👇
   });
+
+  // 👇 NUEVA MAGIA: ESCUCHADOR EN TIEMPO REAL 👇
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOrdersUpdate = () => {
+      console.log("🔄 Actualización detectada: Recargando cola de envíos...");
+      queryClient.invalidateQueries({ queryKey: ["orders-shipping"] });
+    };
+
+    socket.on("ordersUpdated", handleOrdersUpdate);
+
+    return () => {
+      socket.off("ordersUpdated", handleOrdersUpdate);
+    };
+  }, [socket, queryClient]);
 
   const deliverMut = useMutation({
     mutationFn: async (orderId: number) => {
       await updateOrder(orderId, { status: "ENTREGADO" });
     },
     onSuccess: () => {
+      // Opcional invalidar aquí, ya que el socket lo hará, pero lo dejamos por seguridad.
       queryClient.invalidateQueries({ queryKey: ["orders-shipping"] });
       toast.success("¡Orden despachada con éxito!");
     },
@@ -49,7 +71,7 @@ export const EnviosPage = () => {
 
   const allOrders = ordersRes?.data || [];
   const ordersToShip = allOrders.filter(
-    (order) => order.status === "TERMINADO",
+    (order: any) => order.status === "TERMINADO",
   );
 
   return (
@@ -98,7 +120,7 @@ export const EnviosPage = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {ordersToShip.map((order) => (
+            {ordersToShip.map((order: any) => (
               <ShippingOrderCard
                 key={order.id}
                 order={order}
@@ -139,7 +161,7 @@ const ShippingOrderCard = ({ order, onDeliver, isLoading }: any) => {
       </div>
 
       <div className="p-4 flex-1 bg-white space-y-4">
-        {/* 👇 ETIQUETA DE ENVÍO VISUAL 👇 */}
+        {/* ETIQUETA DE ENVÍO VISUAL */}
         <div className="bg-slate-50 rounded-lg border-2 border-dashed border-slate-300 p-4 relative">
           <div className="absolute top-0 right-0 bg-slate-200 text-slate-500 text-[9px] font-bold px-2 py-0.5 rounded-bl-lg uppercase tracking-widest">
             Datos Etiqueta
@@ -250,7 +272,6 @@ const ShippingOrderCard = ({ order, onDeliver, isLoading }: any) => {
 
       {/* Botones de Acción */}
       <div className="p-4 bg-teal-50 border-t border-teal-100 flex flex-col gap-2">
-        {/* 👇 Botón preparado para la futura generación de PDFs 👇 */}
         <Button
           variant="outline"
           className="w-full h-8 text-[11px] font-bold text-teal-700 border-teal-300 bg-white hover:bg-teal-100"
