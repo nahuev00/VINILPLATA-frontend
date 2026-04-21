@@ -1,5 +1,5 @@
 // src/pages/EnviosPage.tsx
-import { useEffect } from "react"; // 👈 IMPORTAMOS useEffect
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Truck,
@@ -13,28 +13,29 @@ import {
   Printer,
   Map,
   Building2,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { getOrders, updateOrder } from "@/services/orderService";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
-// 👇 IMPORTAMOS EL HOOK DEL SOCKET 👇
 import { useSocket } from "@/context/SocketContext";
 
 export const EnviosPage = () => {
   const { user, logoutUser } = useAuth();
   const queryClient = useQueryClient();
-  const { socket } = useSocket(); // 👈 INSTANCIAMOS EL SOCKET
+  const { socket } = useSocket();
+
+  const [searchTerm, setSearchTerm] = useState("");
 
   const { data: ordersRes, isLoading } = useQuery({
     queryKey: ["orders-shipping"],
     queryFn: () => getOrders({ page: 1, limit: 100 }),
-    // 👇 ELIMINAMOS refetchInterval: 15000 👇
   });
 
-  // 👇 NUEVA MAGIA: ESCUCHADOR EN TIEMPO REAL 👇
   useEffect(() => {
     if (!socket) return;
 
@@ -55,13 +56,36 @@ export const EnviosPage = () => {
       await updateOrder(orderId, { status: "ENTREGADO" });
     },
     onSuccess: () => {
-      // Opcional invalidar aquí, ya que el socket lo hará, pero lo dejamos por seguridad.
       queryClient.invalidateQueries({ queryKey: ["orders-shipping"] });
       toast.success("¡Orden despachada con éxito!");
     },
     onError: () => toast.error("Error al actualizar la orden"),
   });
 
+  // 👇 MOVIMOS TODO ESTO ARRIBA DEL "if (isLoading)" PARA RESPETAR LAS REGLAS DE REACT 👇
+  const allOrders = ordersRes?.data || [];
+
+  const ordersToShip = allOrders.filter(
+    (order: any) => order.status === "TERMINADO",
+  );
+
+  const filteredOrders = useMemo(() => {
+    if (!searchTerm) return ordersToShip;
+
+    const lowerTerm = searchTerm.toLowerCase();
+
+    return ordersToShip.filter((order: any) => {
+      return (
+        order.orderNumber?.toLowerCase().includes(lowerTerm) ||
+        order.client?.name?.toLowerCase().includes(lowerTerm) ||
+        order.shippingType?.toLowerCase().includes(lowerTerm) ||
+        order.carrier?.name?.toLowerCase().includes(lowerTerm) ||
+        order.city?.name?.toLowerCase().includes(lowerTerm)
+      );
+    });
+  }, [ordersToShip, searchTerm]);
+
+  // 👇 AHORA SÍ, DESPUÉS DE TODOS LOS HOOKS, PODEMOS RETORNAR EL LOADING 👇
   if (isLoading)
     return (
       <div className="p-8 text-center text-teal-700 font-medium">
@@ -69,14 +93,10 @@ export const EnviosPage = () => {
       </div>
     );
 
-  const allOrders = ordersRes?.data || [];
-  const ordersToShip = allOrders.filter(
-    (order: any) => order.status === "TERMINADO",
-  );
-
   return (
     <div className="flex flex-col h-screen p-4 sm:p-6 lg:p-8 bg-slate-100">
-      <div className="mb-6 bg-teal-950 text-white p-6 rounded-xl shadow-lg flex justify-between items-center shrink-0 border-b-4 border-teal-500">
+      {/* CABECERA PRINCIPAL */}
+      <div className="mb-4 bg-teal-950 text-white p-6 rounded-xl shadow-lg flex justify-between items-center shrink-0 border-b-4 border-teal-500">
         <div>
           <h1 className="text-3xl font-black flex items-center gap-3 tracking-wide">
             <Truck className="w-8 h-8 text-teal-400" />
@@ -107,6 +127,25 @@ export const EnviosPage = () => {
         </div>
       </div>
 
+      {/* BARRA DE BÚSQUEDA */}
+      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-6 shrink-0 flex items-center gap-4">
+        <div className="relative w-full max-w-md">
+          <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input
+            placeholder="Buscar por comisionista, cliente, ciudad o N° de orden..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 h-11 bg-slate-50 text-sm border-slate-300 focus-visible:ring-teal-500"
+          />
+        </div>
+        {searchTerm && (
+          <span className="text-sm font-bold text-teal-600 bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-100">
+            {filteredOrders.length} resultados
+          </span>
+        )}
+      </div>
+
+      {/* ÁREA DE TARJETAS */}
       <div className="flex-1 overflow-y-auto pb-8">
         {ordersToShip.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-400">
@@ -118,9 +157,26 @@ export const EnviosPage = () => {
               Todo ha sido entregado o no han llegado paquetes de producción.
             </p>
           </div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <Search className="w-16 h-16 mb-4 text-slate-300" />
+            <h2 className="text-xl font-bold text-slate-500">
+              No hay coincidencias
+            </h2>
+            <p className="text-slate-400 mt-2">
+              No se encontraron despachos para "{searchTerm}".
+            </p>
+            <Button
+              variant="link"
+              onClick={() => setSearchTerm("")}
+              className="mt-4 text-teal-600"
+            >
+              Limpiar búsqueda
+            </Button>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {ordersToShip.map((order: any) => (
+            {filteredOrders.map((order: any) => (
               <ShippingOrderCard
                 key={order.id}
                 order={order}
@@ -143,7 +199,6 @@ const ShippingOrderCard = ({ order, onDeliver, isLoading }: any) => {
 
   return (
     <div className="bg-white rounded-2xl shadow-md border-2 border-teal-500 overflow-hidden flex flex-col transition-all hover:shadow-lg">
-      {/* Cabecera */}
       <div className="p-4 border-b bg-teal-50 border-teal-100 flex justify-between items-start">
         <div>
           <span className="text-xs font-black text-teal-700 mb-0.5 block uppercase tracking-widest">
@@ -161,13 +216,11 @@ const ShippingOrderCard = ({ order, onDeliver, isLoading }: any) => {
       </div>
 
       <div className="p-4 flex-1 bg-white space-y-4">
-        {/* ETIQUETA DE ENVÍO VISUAL */}
         <div className="bg-slate-50 rounded-lg border-2 border-dashed border-slate-300 p-4 relative">
           <div className="absolute top-0 right-0 bg-slate-200 text-slate-500 text-[9px] font-bold px-2 py-0.5 rounded-bl-lg uppercase tracking-widest">
             Datos Etiqueta
           </div>
 
-          {/* Método de Envío Destacado */}
           <div className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-200/60">
             <Truck
               className={`w-5 h-5 ${isRetiro ? "text-amber-500" : "text-teal-600"}`}
@@ -179,7 +232,6 @@ const ShippingOrderCard = ({ order, onDeliver, isLoading }: any) => {
             </span>
           </div>
 
-          {/* Info del Cliente y Destino */}
           <div className="space-y-2.5">
             <div className="flex items-start gap-2">
               <User className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
@@ -232,7 +284,6 @@ const ShippingOrderCard = ({ order, onDeliver, isLoading }: any) => {
           </div>
         </div>
 
-        {/* Resumen Administrativo */}
         <div className="flex items-center justify-between text-[11px] text-slate-600 bg-slate-100 p-2 rounded">
           <div className="flex items-center gap-1.5">
             <Receipt className="w-3.5 h-3.5 text-slate-400" />
@@ -250,7 +301,6 @@ const ShippingOrderCard = ({ order, onDeliver, isLoading }: any) => {
           </div>
         </div>
 
-        {/* Resumen del paquete */}
         <div>
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
             Contenido del paquete ({order.items?.length}):
@@ -270,7 +320,6 @@ const ShippingOrderCard = ({ order, onDeliver, isLoading }: any) => {
         </div>
       </div>
 
-      {/* Botones de Acción */}
       <div className="p-4 bg-teal-50 border-t border-teal-100 flex flex-col gap-2">
         <Button
           variant="outline"

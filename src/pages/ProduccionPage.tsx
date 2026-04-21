@@ -1,5 +1,5 @@
 // src/pages/ProduccionPage.tsx
-import { useState, useEffect } from "react"; // 👈 IMPORTAMOS useEffect
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Clock,
@@ -37,7 +37,6 @@ import {
 import { OrderItemDetailsModal } from "@/components/OrderItemDetailsModal";
 import { OrderFormModal } from "@/components/OrderFormModal";
 
-// 👇 IMPORTAMOS EL HOOK DEL SOCKET 👇
 import { useSocket } from "@/context/SocketContext";
 
 // Función auxiliar para convertir decimales a HH:mm
@@ -54,7 +53,7 @@ const formatHoursAndMinutes = (decimalHours: number) => {
 
 export const ProduccionPage = () => {
   const queryClient = useQueryClient();
-  const { socket } = useSocket(); // 👈 INSTANCIAMOS EL SOCKET
+  const { socket } = useSocket();
 
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -73,7 +72,6 @@ export const ProduccionPage = () => {
   const { data: ordersRes, isLoading: loadingOrders } = useQuery({
     queryKey: ["orders-production"],
     queryFn: () => getOrders({ page: 1, limit: 100 }),
-    // 👇 ELIMINAMOS refetchInterval: 15000 👇
   });
 
   const { data: materials } = useQuery({
@@ -81,7 +79,6 @@ export const ProduccionPage = () => {
     queryFn: getMaterials,
   });
 
-  // 👇 NUEVA MAGIA: ESCUCHADOR EN TIEMPO REAL 👇
   useEffect(() => {
     if (!socket) return;
 
@@ -89,7 +86,6 @@ export const ProduccionPage = () => {
       console.log(
         "🔄 Actualización en tiempo real detectada: Recargando tablero de producción...",
       );
-      // Forzamos a React Query a traer los datos nuevos al instante
       queryClient.invalidateQueries({ queryKey: ["orders-production"] });
     };
 
@@ -104,8 +100,6 @@ export const ProduccionPage = () => {
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       updateOrderItem(id, data),
     onSuccess: () => {
-      // Como el socket avisa a todos (incluyéndote a ti),
-      // la recarga se hace sola, pero mantenemos esta por seguridad
       queryClient.invalidateQueries({ queryKey: ["orders-production"] });
       toast.success("Trabajo reasignado");
     },
@@ -152,7 +146,6 @@ export const ProduccionPage = () => {
     (order: any) => order.status === "TERMINADO",
   );
 
-  // Clasificación base de estaciones
   const baseProductionStations =
     stations?.filter((s: any) => s.role === "STATION") || [];
   const packagerStations =
@@ -160,7 +153,6 @@ export const ProduccionPage = () => {
   const shipperStations =
     stations?.filter((s: any) => s.role === "SHIPPER") || [];
 
-  // LÓGICA DE FILTRADO DE ESTACIONES DE PRODUCCIÓN
   const filteredProductionStations = baseProductionStations.filter(
     (station: any) => {
       if (
@@ -183,14 +175,11 @@ export const ProduccionPage = () => {
     },
   );
 
-  const showUnassigned = !hideEmptyStations || unassignedItems.length > 0;
-
   const getMaterialName = (id: number) =>
     materials?.find((m: any) => m.id === id)?.name || "Desconocido";
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)]">
-      {/* CABECERA PRINCIPAL */}
       <div className="mb-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -208,7 +197,6 @@ export const ProduccionPage = () => {
         </Button>
       </div>
 
-      {/* BARRA DE FILTROS */}
       <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-center justify-between mb-4 shrink-0">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="relative w-full sm:w-64">
@@ -260,27 +248,23 @@ export const ProduccionPage = () => {
         </div>
       </div>
 
-      {/* ÁREA DE COLUMNAS */}
       <div className="flex-1 overflow-x-auto pb-4">
         <div className="flex gap-6 min-w-max h-full items-start">
-          {/* COLUMNA: SIN ASIGNAR */}
-          {showUnassigned && (
-            <StationColumn
-              title="Sin Asignar / En Espera"
-              items={unassignedItems}
-              station={null}
-              materials={materials}
-              stations={baseProductionStations}
-              getMaterialName={getMaterialName}
-              onUpdate={(id: number, data: any) =>
-                updateItemMut.mutate({ id, data })
-              }
-              onOpenDetails={setSelectedItem}
-              allPendingItems={pendingItems}
-            />
-          )}
+          {/* 👇 COLUMNA: SIN ASIGNAR (AHORA SIEMPRE VISIBLE) 👇 */}
+          <StationColumn
+            title="Sin Asignar / En Espera"
+            items={unassignedItems}
+            station={null}
+            materials={materials}
+            stations={baseProductionStations}
+            getMaterialName={getMaterialName}
+            onUpdate={(id: number, data: any) =>
+              updateItemMut.mutate({ id, data })
+            }
+            onOpenDetails={setSelectedItem}
+            allPendingItems={pendingItems}
+          />
 
-          {/* COLUMNAS: ESTACIONES DE PRODUCCIÓN */}
           {filteredProductionStations.map((station: any) => {
             const stationItems = pendingItems.filter(
               (item: any) => item.assignedToId === station.id,
@@ -303,7 +287,6 @@ export const ProduccionPage = () => {
             );
           })}
 
-          {/* COLUMNA: EMPAQUE */}
           {packagerStations.length > 0 && (
             <div className="pl-6 border-l border-slate-200/60 ml-2 h-full flex gap-6">
               <StationColumn
@@ -327,7 +310,6 @@ export const ProduccionPage = () => {
             </div>
           )}
 
-          {/* COLUMNA: DESPACHOS */}
           {shipperStations.length > 0 && (
             <ShippingColumn
               title={
@@ -344,7 +326,6 @@ export const ProduccionPage = () => {
         </div>
       </div>
 
-      {/* MODALES */}
       <OrderItemDetailsModal
         isOpen={!!selectedItem}
         onClose={() => setSelectedItem(null)}
