@@ -9,9 +9,10 @@ export interface Station {
   id: number;
   name: string;
   username: string;
-  role: string;
-  materials?: MaterialShort[];
-  isFinishingStation: boolean;
+  role: string; // o "STATION" | "PACKAGER" | "SHIPPER"
+  printSpeedPerHour?: number;
+  isFinishingStation?: boolean;
+  materials?: any[];
 }
 
 export interface CreateStationDTO {

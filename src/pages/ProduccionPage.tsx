@@ -1,59 +1,23 @@
 // src/pages/ProduccionPage.tsx
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Clock,
-  Printer,
-  CheckCircle2,
-  ArrowRightLeft,
-  AlertCircle,
-  Loader2,
-  Scissors,
-  Package,
-  Box,
-  Truck,
-  MapPin,
-  Plus,
-  Search,
-  HardHat, // 👈 Nuevo icono para el operario
-} from "lucide-react";
+import { Printer, Loader2, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  getOrders,
-  updateOrderItem,
-  updateOrder,
-} from "@/services/orderService";
+import { updateOrderItem, updateOrder } from "@/services/orderService";
 import { getStations } from "@/services/stationService";
 import { getMaterials } from "@/services/materialService";
+import { useRealtimeOrders } from "@/hooks/useRealTimeOrders";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { OrderItemDetailsModal } from "@/components/OrderItemDetailsModal";
 import { OrderFormModal } from "@/components/OrderFormModal";
-
-import { useSocket } from "@/context/SocketContext";
-
-// Función auxiliar para convertir decimales a HH:mm
-const formatHoursAndMinutes = (decimalHours: number) => {
-  if (isNaN(decimalHours) || decimalHours <= 0) return "0m";
-
-  const hours = Math.floor(decimalHours);
-  const minutes = Math.round((decimalHours - hours) * 60);
-
-  if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h`;
-  return `${minutes}m`;
-};
+import { StationColumn } from "@/components/StationColumn";
+import { ShippingColumn } from "@/components/ShippingColumn";
 
 export const ProduccionPage = () => {
   const queryClient = useQueryClient();
-  const { socket } = useSocket();
 
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -69,32 +33,14 @@ export const ProduccionPage = () => {
     queryFn: getStations,
   });
 
-  const { data: ordersRes, isLoading: loadingOrders } = useQuery({
-    queryKey: ["orders-production"],
-    queryFn: () => getOrders({ page: 1, limit: 100 }),
-  });
-
   const { data: materials } = useQuery({
     queryKey: ["materials"],
     queryFn: getMaterials,
   });
 
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleOrdersUpdate = () => {
-      console.log(
-        "🔄 Actualización en tiempo real detectada: Recargando tablero de producción...",
-      );
-      queryClient.invalidateQueries({ queryKey: ["orders-production"] });
-    };
-
-    socket.on("ordersUpdated", handleOrdersUpdate);
-
-    return () => {
-      socket.off("ordersUpdated", handleOrdersUpdate);
-    };
-  }, [socket, queryClient]);
+  // Reemplazamos 15 líneas de lógica de socket por 1 sola llamada
+  const { data: ordersRes, isLoading: loadingOrders } =
+    useRealtimeOrders("orders-production");
 
   const updateItemMut = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) =>
@@ -116,51 +62,49 @@ export const ProduccionPage = () => {
     onError: () => toast.error("Error al actualizar la orden general"),
   });
 
-  if (loadingStations || loadingOrders)
-    return (
-      <div className="p-8 text-center text-slate-500 flex flex-col items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-4" />
-        <span className="font-medium">Cargando tablero de producción...</span>
-      </div>
-    );
+  // 👇 OPTIMIZACIÓN: Memoizamos el cálculo de las listas de ítems 👇
+  const { pendingItems, unassignedItems, packagingItems, shippingOrders } =
+    useMemo(() => {
+      const allOrders = ordersRes?.data || [];
+      const allItems = allOrders.flatMap((order: any) =>
+        order.items.map((item: any) => ({ ...item, order })),
+      );
 
-  const allOrders = ordersRes?.data || [];
+      const pending = allItems.filter((item: any) =>
+        ["PREIMPRESION", "EN_COLA", "IMPRIMIENDO", "TERMINACIONES"].includes(
+          item.status,
+        ),
+      );
 
-  const allItems = allOrders.flatMap((order: any) =>
-    order.items.map((item: any) => ({ ...item, order })),
-  );
+      return {
+        pendingItems: pending,
+        unassignedItems: pending.filter((item: any) => !item.assignedToId),
+        packagingItems: allItems.filter(
+          (item: any) => item.status === "REALIZADO",
+        ),
+        shippingOrders: allOrders.filter(
+          (order: any) => order.status === "TERMINADO",
+        ),
+      };
+    }, [ordersRes]);
 
-  const pendingItems = allItems.filter((item: any) =>
-    ["PREIMPRESION", "EN_COLA", "IMPRIMIENDO", "TERMINACIONES"].includes(
-      item.status,
-    ),
-  );
-  const unassignedItems = pendingItems.filter(
-    (item: any) => !item.assignedToId,
-  );
+  // 👇 OPTIMIZACIÓN: Memoizamos el filtrado de las estaciones 👇
+  const {
+    baseProductionStations,
+    packagerStations,
+    shipperStations,
+    filteredProductionStations,
+  } = useMemo(() => {
+    const base = stations?.filter((s: any) => s.role === "STATION") || [];
+    const packagers = stations?.filter((s: any) => s.role === "PACKAGER") || [];
+    const shippers = stations?.filter((s: any) => s.role === "SHIPPER") || [];
 
-  const packagingItems = allItems.filter(
-    (item: any) => item.status === "REALIZADO",
-  );
-  const shippingOrders = allOrders.filter(
-    (order: any) => order.status === "TERMINADO",
-  );
-
-  const baseProductionStations =
-    stations?.filter((s: any) => s.role === "STATION") || [];
-  const packagerStations =
-    stations?.filter((s: any) => s.role === "PACKAGER") || [];
-  const shipperStations =
-    stations?.filter((s: any) => s.role === "SHIPPER") || [];
-
-  const filteredProductionStations = baseProductionStations.filter(
-    (station: any) => {
+    const filtered = base.filter((station: any) => {
       if (
         searchStation &&
         !station.name.toLowerCase().includes(searchStation.toLowerCase())
-      ) {
+      )
         return false;
-      }
       if (stationTypeFilter === "PRINT" && station.isFinishingStation)
         return false;
       if (stationTypeFilter === "FINISH" && !station.isFinishingStation)
@@ -172,11 +116,32 @@ export const ProduccionPage = () => {
         if (stationItems.length === 0) return false;
       }
       return true;
-    },
-  );
+    });
+
+    return {
+      baseProductionStations: base,
+      packagerStations: packagers,
+      shipperStations: shippers,
+      filteredProductionStations: filtered,
+    };
+  }, [
+    stations,
+    searchStation,
+    stationTypeFilter,
+    hideEmptyStations,
+    pendingItems,
+  ]);
 
   const getMaterialName = (id: number) =>
     materials?.find((m: any) => m.id === id)?.name || "Desconocido";
+
+  if (loadingStations || loadingOrders)
+    return (
+      <div className="p-8 text-center text-slate-500 flex flex-col items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-4" />
+        <span className="font-medium">Cargando tablero de producción...</span>
+      </div>
+    );
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)]">
@@ -337,469 +302,6 @@ export const ProduccionPage = () => {
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
       />
-    </div>
-  );
-};
-
-// ==========================================
-// SUBCOMPONENTE: COLUMNA DE DESPACHOS
-// ==========================================
-const ShippingColumn = ({ title, orders, onDeliver }: any) => {
-  return (
-    <div className="flex flex-col w-[350px] rounded-xl border bg-teal-50/40 border-teal-200 h-full max-h-full overflow-hidden shrink-0 shadow-sm relative">
-      <div className="p-4 border-b rounded-t-xl shrink-0 shadow-sm sticky top-0 z-20 bg-teal-50 border-teal-200">
-        <div className="flex justify-between items-start mb-2">
-          <div className="flex items-center gap-2">
-            <Truck className="w-5 h-5 text-teal-600" />
-            <h3 className="font-bold text-base text-teal-900">{title}</h3>
-          </div>
-          <span className="text-xs font-bold px-2 py-1 rounded-full border bg-teal-100 text-teal-800 border-teal-200 shadow-sm">
-            {orders.length} pedidos
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 mt-3">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-teal-700 bg-white px-2.5 py-1.5 rounded-md border border-teal-100 shadow-sm w-full justify-center">
-            <Package className="w-3.5 h-3.5" />
-            Órdenes Listas para Entregar
-          </div>
-        </div>
-      </div>
-
-      <div className="p-3 overflow-y-auto flex-1 space-y-3 z-10">
-        {orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-sm py-10 italic border-2 border-dashed rounded-lg text-teal-500 border-teal-200 bg-white/50">
-            <CheckCircle2 className="w-8 h-8 mb-2 text-teal-300" />
-            No hay despachos pendientes
-          </div>
-        ) : (
-          orders.map((order: any) => (
-            <ShippingOrderCard
-              key={order.id}
-              order={order}
-              onDeliver={onDeliver}
-            />
-          ))
-        )}
-      </div>
-    </div>
-  );
-};
-
-// ==========================================
-// SUBCOMPONENTE: TARJETA DE ORDEN DE DESPACHO
-// ==========================================
-const ShippingOrderCard = ({ order, onDeliver }: any) => {
-  return (
-    <div className="bg-white rounded-lg border-2 border-teal-400 shadow-sm shadow-teal-100/50 p-3 transition-all hover:shadow-md">
-      <div className="flex justify-between items-start border-b border-slate-100 pb-2 mb-2">
-        <div>
-          <span className="text-xs font-black text-teal-700">
-            {order.orderNumber}
-          </span>
-          <h4 className="text-sm font-bold text-slate-900 leading-tight mt-0.5">
-            {order.client.name}
-          </h4>
-        </div>
-        <span className="bg-teal-100 text-teal-800 font-black px-2 py-1 rounded text-[10px] uppercase tracking-wider">
-          TERMINADO
-        </span>
-      </div>
-
-      <div className="bg-slate-50 rounded p-2 border border-slate-100 mb-3">
-        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1">
-          <Truck className="w-3.5 h-3.5 text-teal-600" />
-          Envío:{" "}
-          <span className="uppercase text-teal-700">
-            {order.shippingType || "A convenir"}
-          </span>
-        </div>
-        {order.client?.address && (
-          <div className="flex items-start gap-1.5 text-[10px] font-medium text-slate-500 mt-1.5">
-            <MapPin className="w-3 h-3 shrink-0 text-slate-400 mt-0.5" />
-            <span className="leading-tight">{order.client.address}</span>
-          </div>
-        )}
-      </div>
-
-      <Button
-        onClick={() => onDeliver(order.id)}
-        className="w-full h-9 bg-teal-500 hover:bg-teal-600 text-white font-bold text-xs shadow-sm"
-      >
-        <CheckCircle2 className="w-4 h-4 mr-1.5" /> MARCAR COMO ENTREGADO
-      </Button>
-    </div>
-  );
-};
-
-// ==========================================
-// SUBCOMPONENTE: COLUMNA DE MÁQUINAS / EMPAQUE
-// ==========================================
-const StationColumn = ({
-  title,
-  items,
-  station,
-  stations,
-  getMaterialName,
-  onUpdate,
-  onOpenDetails,
-  allPendingItems,
-}: any) => {
-  const isPackager = station?.role === "PACKAGER";
-
-  const totalLinearMeters = items.reduce((sum: number, item: any) => {
-    const ml =
-      item.linearMeters > 0
-        ? item.linearMeters
-        : ((item.heightMm || 0) / 1000) * (item.copies || 1);
-    return sum + ml;
-  }, 0);
-
-  const speed = station?.printSpeedPerHour || 10;
-  const rawHours = speed > 0 ? totalLinearMeters / speed : 0;
-  const displayTime = formatHoursAndMinutes(rawHours);
-
-  return (
-    <div
-      className={`flex flex-col w-[350px] rounded-xl border h-full max-h-full overflow-hidden shrink-0 shadow-sm relative ${
-        isPackager
-          ? "bg-purple-50/30 border-purple-200"
-          : "bg-slate-100/50 border-slate-200"
-      }`}
-    >
-      <div
-        className={`p-4 border-b rounded-t-xl shrink-0 shadow-sm sticky top-0 z-20 ${
-          isPackager
-            ? "bg-purple-50 border-purple-200"
-            : "bg-white border-slate-200"
-        }`}
-      >
-        <div className="flex justify-between items-start mb-2">
-          <div className="flex items-center gap-2">
-            {isPackager ? (
-              <Package className="w-5 h-5 text-purple-600" />
-            ) : station?.isFinishingStation ? (
-              <Scissors className="w-5 h-5 text-amber-500" />
-            ) : (
-              <Printer className="w-5 h-5 text-blue-500" />
-            )}
-
-            <h3
-              className={`font-bold text-base ${isPackager ? "text-purple-900" : "text-slate-800"}`}
-            >
-              {title}
-            </h3>
-          </div>
-          <span
-            className={`text-xs font-bold px-2 py-1 rounded-full border ${
-              isPackager
-                ? "bg-purple-100 text-purple-800 border-purple-200"
-                : "bg-slate-100 text-slate-600 border-slate-200"
-            }`}
-          >
-            {items.length} trab.
-          </span>
-        </div>
-
-        {station && !isPackager ? (
-          <div className="flex items-center gap-3 mt-3">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-md border border-amber-200 shadow-sm">
-              <Clock className="w-3.5 h-3.5" />
-              {displayTime}
-            </div>
-            {!station.isFinishingStation && (
-              <div className="flex items-center gap-1.5 text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-md border border-blue-200 shadow-sm">
-                <ArrowRightLeft className="w-3.5 h-3.5" />
-                {totalLinearMeters.toFixed(1)} ML
-              </div>
-            )}
-          </div>
-        ) : station && isPackager ? (
-          <div className="flex items-center gap-3 mt-3">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-purple-700 bg-purple-100/50 px-2.5 py-1.5 rounded-md border border-purple-200 shadow-sm w-full justify-center">
-              <Box className="w-3.5 h-3.5" />
-              Bandeja Global de Armado
-            </div>
-          </div>
-        ) : (
-          <div className="text-xs text-amber-600 font-medium flex items-center gap-1 mt-2">
-            <AlertCircle className="w-3.5 h-3.5" /> Requieren asignación urgente
-          </div>
-        )}
-      </div>
-
-      <div className="p-3 overflow-y-auto flex-1 space-y-3 z-10">
-        {items.length === 0 ? (
-          <div
-            className={`flex flex-col items-center justify-center text-sm py-10 italic border-2 border-dashed rounded-lg ${
-              isPackager
-                ? "text-purple-400 border-purple-200 bg-purple-50/50"
-                : "text-slate-400 border-slate-200 bg-slate-50/50"
-            }`}
-          >
-            <CheckCircle2
-              className={`w-8 h-8 mb-2 ${isPackager ? "text-purple-300" : "text-slate-300"}`}
-            />
-            {isPackager ? "No hay trabajos listos" : "Máquina libre"}
-          </div>
-        ) : (
-          items.map((item: any) => {
-            const itemML =
-              item.linearMeters > 0
-                ? item.linearMeters
-                : ((item.heightMm || 0) / 1000) * (item.copies || 1);
-
-            return (
-              <JobCard
-                key={item.id}
-                item={item}
-                itemML={itemML}
-                stations={stations}
-                getMaterialName={getMaterialName}
-                onUpdate={onUpdate}
-                onOpenDetails={onOpenDetails}
-                allPendingItems={allPendingItems}
-              />
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-};
-
-// ==========================================
-// SUBCOMPONENTE: TARJETA DE TRABAJO (ITEM) - 🔥 DISEÑO LIMPIO
-// ==========================================
-const JobCard = ({
-  item,
-  itemML,
-  stations,
-  getMaterialName,
-  onUpdate,
-  onOpenDetails,
-  allPendingItems,
-}: any) => {
-  const compatibleStations =
-    stations?.filter((st: any) =>
-      st.materials?.some((m: any) => m.id === item.materialId),
-    ) || [];
-
-  const isFinishing = item.status === "TERMINACIONES";
-  const isPrinting = item.status === "IMPRIMIENDO";
-  const isReady = item.status === "REALIZADO";
-  const isLocked = isPrinting || isFinishing;
-
-  // Lógica para encontrar el operario actual en base a los logs.
-  // Buscamos el log más reciente que coincida con el estado de impresión o terminación actual.
-  let currentOperatorName = "Operador no asignado";
-  if (isLocked && item.logs && item.logs.length > 0) {
-    const recentLog = [...item.logs]
-      .reverse()
-      .find((log: any) => log.status === item.status);
-
-    if (recentLog && recentLog.operator) {
-      currentOperatorName = recentLog.operator.name;
-    }
-  }
-
-  return (
-    <div
-      className={`bg-white rounded-lg border shadow-sm p-3 transition-all relative ${
-        isLocked
-          ? isFinishing
-            ? "border-amber-400 shadow-amber-100 ring-1 ring-amber-400 ring-offset-1"
-            : "border-blue-400 shadow-blue-100 ring-1 ring-blue-400 ring-offset-1"
-          : isReady
-            ? "border-purple-400 shadow-purple-100 ring-1 ring-purple-400 ring-offset-1"
-            : "border-slate-200 hover:shadow-md hover:border-blue-300"
-      }`}
-    >
-      <div className="cursor-pointer" onClick={() => onOpenDetails(item)}>
-        {/* ENCABEZADO: Cliente y Número de Orden */}
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex flex-col">
-            <span className="text-xs font-black text-blue-600 hover:underline">
-              {item.order.orderNumber}
-            </span>
-            <span
-              className="text-[15px] font-black text-slate-900 leading-tight truncate w-[250px]"
-              title={item.order.client.name}
-            >
-              {item.order.client.name}
-            </span>
-          </div>
-        </div>
-
-        {/* INFO LIMPIA: Material, Tamaño y Largo */}
-        <div className="bg-slate-50 p-2.5 rounded-md border border-slate-100 mb-3 space-y-2 hover:bg-slate-100 transition-colors">
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">
-              Material:
-            </span>
-            <span className="font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-              {getMaterialName(item.materialId)}
-            </span>
-          </div>
-
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">
-              Tamaño:
-            </span>
-            <span className="font-mono text-slate-700 font-bold">
-              {item.widthMm} x {item.heightMm} mm{" "}
-              <span className="text-slate-400 font-sans ml-1">
-                ({item.copies}u)
-              </span>
-            </span>
-          </div>
-
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">
-              Largo Lineal:
-            </span>
-            <span className="font-black text-slate-700">
-              {itemML.toFixed(2)} ML
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ESTADO / ACCIONES */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-100 relative z-10">
-        {isLocked ? (
-          <div
-            className={`flex flex-col items-center gap-1.5 px-2 py-2 rounded-md w-full justify-center border shadow-inner ${
-              isFinishing
-                ? "bg-amber-50 border-amber-200"
-                : "bg-blue-50 border-blue-200"
-            }`}
-          >
-            <div
-              className={`flex items-center gap-1.5 font-black text-[11px] tracking-wide ${
-                isFinishing ? "text-amber-700" : "text-blue-700"
-              }`}
-            >
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              {isFinishing ? "EN TERMINACIÓN..." : "IMPRIMIENDO..."}
-            </div>
-
-            {/* 👷‍♂️ AQUÍ SE MUESTRA EL OPERADOR */}
-            <div className="flex items-center gap-2 text-[14px] font-bold text-slate-600 bg-white px-3 py-0.5 rounded-full border border-slate-200 shadow-sm mt-0.5 uppercase">
-              <HardHat className="w-4 h-4 text-slate-400" />
-              {currentOperatorName}
-            </div>
-          </div>
-        ) : (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className={`h-8 text-xs px-3 font-bold w-full shadow-sm ${
-                  isReady
-                    ? "bg-purple-50 border-purple-300 hover:bg-purple-100 text-purple-800"
-                    : "bg-white hover:bg-slate-50 border-slate-300 text-slate-700"
-                }`}
-              >
-                {isReady ? (
-                  <>
-                    <Package className="w-3.5 h-3.5 mr-1.5" /> Esperando Empaque
-                  </>
-                ) : (
-                  <>
-                    <ArrowRightLeft className="w-3.5 h-3.5 mr-1.5" /> Reasignar
-                    Trabajo
-                  </>
-                )}
-              </Button>
-            </PopoverTrigger>
-
-            <PopoverContent
-              className="w-64 p-2 bg-white shadow-2xl border border-slate-200 z-50 rounded-lg"
-              align="start"
-            >
-              <span className="text-xs font-bold text-slate-500 mb-2.5 block uppercase tracking-wider pl-1">
-                {isReady ? "Corregir asignación:" : "Reasignar a:"}
-              </span>
-              <div className="flex flex-col gap-1.5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="justify-start h-8 text-xs font-medium text-amber-700 hover:text-amber-800 hover:bg-amber-100 border border-transparent hover:border-amber-200"
-                  onClick={() =>
-                    onUpdate(item.id, {
-                      assignedToId: null,
-                      status: "PREIMPRESION",
-                    })
-                  }
-                >
-                  Devolver a Espera / Preimpresión
-                </Button>
-                <div className="h-px bg-slate-100 my-0.5"></div>
-
-                {compatibleStations.length > 0 ? (
-                  compatibleStations.map((st: any) => {
-                    const stItems =
-                      allPendingItems?.filter(
-                        (i: any) => i.assignedToId === st.id,
-                      ) || [];
-                    const stTotalML = stItems.reduce((sum: number, i: any) => {
-                      const ml =
-                        i.linearMeters > 0
-                          ? i.linearMeters
-                          : ((i.heightMm || 0) / 1000) * (i.copies || 1);
-                      return sum + ml;
-                    }, 0);
-                    const stSpeed = st.printSpeedPerHour || 10;
-                    const stRawHours = stSpeed > 0 ? stTotalML / stSpeed : 0;
-                    const stDisplayTime = formatHoursAndMinutes(stRawHours);
-
-                    return (
-                      <Button
-                        key={st.id}
-                        variant="ghost"
-                        size="sm"
-                        className="justify-start h-8 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-100 border border-transparent flex w-full items-center"
-                        onClick={() =>
-                          onUpdate(item.id, {
-                            assignedToId: st.id,
-                            status: "EN_COLA",
-                          })
-                        }
-                      >
-                        <span className="truncate max-w-[120px]">
-                          {st.name}
-                        </span>
-
-                        <span
-                          className={`ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                            st.isFinishingStation
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-blue-100 text-blue-700"
-                          }`}
-                        >
-                          {st.isFinishingStation ? "Corte" : "Impresión"}
-                        </span>
-
-                        <span className="ml-auto text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1 border border-slate-200">
-                          <Clock className="w-2.5 h-2.5 text-slate-400" />{" "}
-                          {stDisplayTime}
-                        </span>
-                      </Button>
-                    );
-                  })
-                ) : (
-                  <div className="text-[10px] text-amber-700 italic px-2 py-2 leading-relaxed border border-amber-200 bg-amber-50 rounded-md shadow-inner">
-                    Ninguna otra máquina es compatible con{" "}
-                    {getMaterialName(item.materialId)}.
-                  </div>
-                )}
-              </div>
-            </PopoverContent>
-          </Popover>
-        )}
-      </div>
     </div>
   );
 };
