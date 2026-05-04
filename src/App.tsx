@@ -26,6 +26,7 @@ import { EstacionDashboardPage } from "./pages/EstacionDashboardPage";
 import { EmpaquetadoPage } from "./pages/EmpaquetadoPage";
 import { EnviosPage } from "./pages/EnviosPage";
 import { FacturacionPage } from "./pages/FacturacionPage";
+import { OperadoresPage } from "./pages/OperatorPage";
 
 const Dashboard = () => (
   <div>
@@ -98,6 +99,7 @@ function App() {
               <Route path="/produccion" element={<ProduccionPage />} />
               <Route path="/estaciones" element={<EstacionesPage />} />
               <Route path="/ciudades" element={<CiudadesPage />} />
+              <Route path="/operadores" element={<OperadoresPage />} />
               <Route path="/transportes" element={<TransportesPage />} />
               <Route path="/rubros" element={<RubrosPage />} />
               <Route path="/facturacion" element={<FacturacionPage />} />

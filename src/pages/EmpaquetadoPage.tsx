@@ -1,5 +1,5 @@
 // src/pages/EmpaquetadoPage.tsx
-import { useEffect } from "react"; // 👈 IMPORTAMOS useEffect
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Package,
@@ -25,22 +25,19 @@ import { getMaterials } from "@/services/materialService";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 
-// 👇 IMPORTAMOS EL HOOK DEL SOCKET 👇
 import { useSocket } from "@/context/SocketContext";
 
 export const EmpaquetadoPage = () => {
   const { user, logoutUser } = useAuth();
   const queryClient = useQueryClient();
-  const { socket } = useSocket(); // 👈 INSTANCIAMOS EL SOCKET
+  const { socket } = useSocket();
 
-  // 1. Traemos las órdenes
   const { data: ordersRes, isLoading: loadingOrders } = useQuery({
     queryKey: ["orders-packaging"],
     queryFn: () => getOrders({ page: 1, limit: 100 }),
-    // 👇 ELIMINAMOS refetchInterval: 10000 👇
   });
 
-  // 👇 NUEVA MAGIA: ESCUCHADOR EN TIEMPO REAL 👇
+  // 👇 ESCUCHADOR EN TIEMPO REAL 👇
   useEffect(() => {
     if (!socket) return;
 
@@ -56,7 +53,6 @@ export const EmpaquetadoPage = () => {
     };
   }, [socket, queryClient]);
 
-  // 2. Traemos el catálogo de materiales para poder traducir los IDs
   const { data: materials, isLoading: loadingMaterials } = useQuery({
     queryKey: ["materials"],
     queryFn: getMaterials,
@@ -77,7 +73,6 @@ export const EmpaquetadoPage = () => {
     onError: () => toast.error("Error al empaquetar la orden"),
   });
 
-  // Función traductora de ID a Nombre
   const getMaterialName = (id: number) => {
     return materials?.find((m) => m.id === id)?.name || "Material desconocido";
   };
@@ -224,14 +219,12 @@ const OrderPackageCard = ({
               </div>
 
               <div className="flex-1 min-w-0 space-y-2">
-                {/* Título Principal */}
                 <p
                   className={`text-sm font-black truncate leading-tight ${isDone ? "text-slate-800" : "text-slate-500"}`}
                 >
                   {item.copies}x {item.fileName || `Renglón ${index + 1}`}
                 </p>
 
-                {/* Info Técnica (Medidas y Material) */}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                     {item.widthMm}x{item.heightMm}mm
@@ -243,7 +236,6 @@ const OrderPackageCard = ({
                   </span>
                 </div>
 
-                {/* Terminaciones */}
                 {item.finishing && (
                   <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-100 p-1.5 rounded text-[11px] text-amber-800">
                     <Scissors className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
@@ -254,7 +246,6 @@ const OrderPackageCard = ({
                   </div>
                 )}
 
-                {/* Notas Específicas */}
                 {item.notes && (
                   <div className="flex items-start gap-1.5 bg-white border border-slate-200 p-1.5 rounded text-[11px] text-slate-600 italic shadow-sm">
                     <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-400" />

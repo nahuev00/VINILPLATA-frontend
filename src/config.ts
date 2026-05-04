@@ -5,6 +5,7 @@ import {
   FilePlus,
   Files,
   MonitorPlay,
+  PersonStanding,
   Settings,
   MapPin,
   Truck,
@@ -41,6 +42,11 @@ export const sidebarNavigation = [
     title: "Estaciones",
     href: "/estaciones",
     icon: MonitorPlay,
+  },
+  {
+    title: "Operadores",
+    href: "/operadores",
+    icon: PersonStanding,
   },
   {
     title: "Materiales",

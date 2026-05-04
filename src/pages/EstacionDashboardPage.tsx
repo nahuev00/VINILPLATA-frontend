@@ -1,5 +1,5 @@
 // src/pages/EstacionDashboardPage.tsx
-import { useState, useEffect } from "react"; // 👈 IMPORTAMOS useEffect
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Play,
@@ -15,12 +15,14 @@ import {
   Loader2,
   ArrowRight,
   Scissors,
+  HardHat,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { getOrders, updateOrderItem } from "@/services/orderService";
 import { getMaterials } from "@/services/materialService";
 import { getStations } from "@/services/stationService";
+import { getOperators } from "@/services/operatorService";
 import { useAuth } from "@/context/AuthContext";
 
 import { Button } from "@/components/ui/button";
@@ -30,17 +32,16 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-// 👇 IMPORTAMOS EL HOOK DEL SOCKET 👇
 import { useSocket } from "@/context/SocketContext";
 
 export const EstacionDashboardPage = () => {
   const { user, logoutUser } = useAuth();
   const queryClient = useQueryClient();
-  const { socket } = useSocket(); // 👈 INSTANCIAMOS EL SOCKET
+  const { socket } = useSocket();
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [globalOperatorId, setGlobalOperatorId] = useState<number | "">("");
 
-  // El estado "En Proceso" depende de si es Impresora o Terminación
   const activeStatus = user?.isFinishingStation
     ? "TERMINACIONES"
     : "IMPRIMIENDO";
@@ -48,26 +49,12 @@ export const EstacionDashboardPage = () => {
   const { data: ordersRes, isLoading: loadingOrders } = useQuery({
     queryKey: ["orders-station", user?.id],
     queryFn: () => getOrders({ page: 1, limit: 100 }),
-    // 👇 ELIMINAMOS refetchInterval: 10000 👇
   });
 
-  // 👇 NUEVA MAGIA: ESCUCHADOR EN TIEMPO REAL 👇
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleOrdersUpdate = () => {
-      console.log(
-        "🔄 Actualización en tiempo real: Recargando cola de la estación...",
-      );
-      queryClient.invalidateQueries({ queryKey: ["orders-station"] });
-    };
-
-    socket.on("ordersUpdated", handleOrdersUpdate);
-
-    return () => {
-      socket.off("ordersUpdated", handleOrdersUpdate);
-    };
-  }, [socket, queryClient]);
+  const { data: operators } = useQuery({
+    queryKey: ["operators"],
+    queryFn: getOperators,
+  });
 
   const { data: materials } = useQuery({
     queryKey: ["materials"],
@@ -78,26 +65,51 @@ export const EstacionDashboardPage = () => {
     queryFn: getStations,
   });
 
+  useEffect(() => {
+    if (!socket) return;
+    const handleOrdersUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ["orders-station"] });
+    };
+    socket.on("ordersUpdated", handleOrdersUpdate);
+    return () => {
+      socket.off("ordersUpdated", handleOrdersUpdate);
+    };
+  }, [socket, queryClient]);
+
+  // 👇 Mutación Individual 👇
   const updateMut = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       updateOrderItem(id, data),
     onSuccess: () => {
-      // Opcional invalidar aquí, ya que el socket lo hará, pero es buena práctica mantenerlo por si el socket falla
       queryClient.invalidateQueries({ queryKey: ["orders-station"] });
       toast.success("Estado actualizado correctamente");
     },
     onError: () => toast.error("Error al actualizar el trabajo"),
   });
 
+  // 👇 Mutación Múltiple (Bulk) 👇
   const updateBulkMut = useMutation({
-    mutationFn: async ({ ids, status }: { ids: number[]; status: string }) => {
-      const promises = ids.map((id) => updateOrderItem(id, { status }));
+    mutationFn: async ({
+      ids,
+      status,
+      operatorId,
+      stationId, // 👈 AGREGADO AQUÍ
+    }: {
+      ids: number[];
+      status: string;
+      operatorId: number;
+      stationId?: number; // 👈 AGREGADO AQUÍ
+    }) => {
+      const promises = ids.map(
+        (id) => updateOrderItem(id, { status, operatorId, stationId }), // 👈 AGREGADO AQUÍ
+      );
       return Promise.all(promises);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders-station"] });
       toast.success(`${selectedIds.length} trabajos iniciados`);
       setSelectedIds([]);
+      setGlobalOperatorId("");
     },
     onError: () => toast.error("Error al iniciar los trabajos"),
   });
@@ -110,22 +122,21 @@ export const EstacionDashboardPage = () => {
     );
 
   const allItems =
-    ordersRes?.data.flatMap((order) =>
-      order.items.map((item) => ({ ...item, order })),
+    ordersRes?.data.flatMap((order: any) =>
+      order.items.map((item: any) => ({ ...item, order })),
     ) || [];
 
-  const myItems = allItems.filter((item) => item.assignedToId === user?.id);
-
-  // Ambas máquinas reciben sus trabajos en la cola
-  const enColaItems = myItems.filter((item) => item.status === "EN_COLA");
-
-  // Filtramos la columna derecha por los estados correspondientes
+  const myItems = allItems.filter(
+    (item: any) => item.assignedToId === user?.id,
+  );
+  const enColaItems = myItems.filter((item: any) => item.status === "EN_COLA");
   const activosItems = myItems.filter(
-    (item) => item.status === "IMPRIMIENDO" || item.status === "TERMINACIONES",
+    (item: any) =>
+      item.status === "IMPRIMIENDO" || item.status === "TERMINACIONES",
   );
 
   const getMaterialName = (id: number) =>
-    materials?.find((m) => m.id === id)?.name || "Desconocido";
+    materials?.find((m: any) => m.id === id)?.name || "Desconocido";
 
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) =>
@@ -134,24 +145,36 @@ export const EstacionDashboardPage = () => {
   };
 
   const handleBulkStart = () => {
-    if (selectedIds.length > 0) {
-      updateBulkMut.mutate({ ids: selectedIds, status: activeStatus });
+    if (selectedIds.length > 0 && globalOperatorId !== "") {
+      updateBulkMut.mutate({
+        ids: selectedIds,
+        status: activeStatus,
+        operatorId: Number(globalOperatorId),
+        stationId: user?.id, // 👈 ENVIAMOS EL ID DE LA MÁQUINA AL BULK
+      });
     }
   };
 
-  // LÓGICA DE DERIVACIÓN Y FINALIZACIÓN
   const handleFinish = (itemId: number, nextStationId: number | null) => {
     if (nextStationId) {
-      // Se deriva a otra máquina: Entra a su "EN_COLA"
       updateMut.mutate({
         id: itemId,
-        data: { status: "EN_COLA", assignedToId: nextStationId },
+        data: {
+          status: "EN_COLA",
+          assignedToId: nextStationId,
+          // Al mandarlo a otra máquina, podríamos o no enviar el stationId actual como log,
+          // pero dejémoslo simple por ahora: solo registramos quién lo mandó.
+          stationId: user?.id,
+        },
       });
     } else {
-      // Finalizado por completo: Pasa a REALIZADO (esperando empaquetado)
       updateMut.mutate({
         id: itemId,
-        data: { status: "REALIZADO", assignedToId: null },
+        data: {
+          status: "REALIZADO",
+          assignedToId: null,
+          stationId: user?.id, // 👈 Para que quede en el log que esta máquina lo terminó
+        },
       });
     }
   };
@@ -208,23 +231,53 @@ export const EstacionDashboardPage = () => {
           </div>
 
           {selectedIds.length > 0 && (
-            <div className="bg-blue-600 text-white p-3 flex justify-between items-center shadow-md animate-in slide-in-from-top-2 shrink-0 z-10">
-              <div className="flex items-center gap-2 font-bold">
-                <Layers className="w-5 h-5" />
+            <div className="bg-blue-600 text-white p-3 flex flex-col sm:flex-row justify-between items-center gap-3 shadow-md animate-in slide-in-from-top-2 shrink-0 z-10">
+              <div className="flex items-center gap-2 font-bold w-full sm:w-auto">
+                <Layers className="w-5 h-5 shrink-0" />
                 <span>{selectedIds.length} seleccionados</span>
               </div>
-              <Button
-                onClick={handleBulkStart}
-                disabled={updateBulkMut.isPending}
-                className="bg-white text-blue-700 hover:bg-blue-50 font-black shadow-sm"
-              >
-                {updateBulkMut.isPending ? (
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                ) : (
-                  <Play className="w-5 h-5 mr-2 fill-current" />
-                )}
-                INICIAR SELECCIÓN
-              </Button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-48">
+                  <select
+                    className="w-full h-10 pl-3 pr-8 rounded-md bg-blue-700 border-blue-500 text-white text-sm font-medium focus:ring-white focus:border-white appearance-none cursor-pointer"
+                    value={globalOperatorId}
+                    onChange={(e) =>
+                      setGlobalOperatorId(Number(e.target.value))
+                    }
+                  >
+                    <option
+                      value=""
+                      disabled
+                      className="bg-white text-slate-700"
+                    >
+                      Seleccionar Operario
+                    </option>
+                    {operators?.map((op: any) => (
+                      <option
+                        key={op.id}
+                        value={op.id}
+                        className="bg-white text-slate-900"
+                      >
+                        {op.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <Button
+                  onClick={handleBulkStart}
+                  disabled={updateBulkMut.isPending || globalOperatorId === ""}
+                  className="bg-white text-blue-700 hover:bg-blue-50 font-black shadow-sm shrink-0 disabled:opacity-50"
+                >
+                  {updateBulkMut.isPending ? (
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  ) : (
+                    <Play className="w-5 h-5 mr-2 fill-current" />
+                  )}
+                  INICIAR
+                </Button>
+              </div>
             </div>
           )}
 
@@ -239,10 +292,14 @@ export const EstacionDashboardPage = () => {
                   key={item.id}
                   item={item}
                   getMaterialName={getMaterialName}
-                  onAction={() =>
+                  onAction={(operatorId: number) =>
                     updateMut.mutate({
                       id: item.id,
-                      data: { status: activeStatus },
+                      data: {
+                        status: activeStatus,
+                        operatorId,
+                        stationId: user?.id, // 👈 ENVIAMOS EL ID DE LA MÁQUINA INDIVIDUAL
+                      },
                     })
                   }
                   actionType="START"
@@ -252,6 +309,7 @@ export const EstacionDashboardPage = () => {
                   stations={stations}
                   userId={user?.id}
                   isFinishing={user?.isFinishingStation}
+                  operators={operators}
                 />
               ))
             )}
@@ -291,6 +349,7 @@ export const EstacionDashboardPage = () => {
                   stations={stations}
                   userId={user?.id}
                   isFinishing={user?.isFinishingStation}
+                  operators={operators}
                 />
               ))
             )}
@@ -315,7 +374,10 @@ const OperatorJobCard = ({
   stations,
   userId,
   isFinishing,
+  operators,
 }: any) => {
+  const [localOperatorId, setLocalOperatorId] = useState<number | "">("");
+
   const cardStyles =
     actionType === "START"
       ? isSelected
@@ -413,23 +475,52 @@ const OperatorJobCard = ({
       {!(actionType === "START" && isBulkModeActive && !isSelected) && (
         <div onClick={(e) => e.stopPropagation()}>
           {actionType === "START" ? (
-            <Button
-              onClick={() => onAction(null)}
-              className={`w-full h-14 text-lg font-black tracking-wide shadow-md transition-all mt-2 ${
-                isSelected
-                  ? "bg-slate-200 text-slate-500 hover:bg-slate-300 shadow-none"
-                  : "bg-blue-600 hover:bg-blue-700 text-white"
-              }`}
-            >
-              {isSelected ? (
-                "SELECCIONADO"
-              ) : (
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              {!isSelected && (
                 <>
-                  <Play className="w-5 h-5 mr-2 fill-current" />{" "}
-                  {isFinishing ? "INICIAR TERMINACIÓN" : "INICIAR IMPRESIÓN"}
+                  <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 mb-2">
+                    <HardHat className="w-3.5 h-3.5" /> ¿Quién realiza el
+                    trabajo?
+                  </label>
+                  <select
+                    className="w-full h-11 px-3 rounded-lg border border-slate-300 bg-slate-50 text-sm font-medium mb-3 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+                    value={localOperatorId}
+                    onChange={(e) => setLocalOperatorId(Number(e.target.value))}
+                  >
+                    <option value="" disabled>
+                      -- Seleccione su nombre --
+                    </option>
+                    {operators?.map((op: any) => (
+                      <option key={op.id} value={op.id}>
+                        {op.name}
+                      </option>
+                    ))}
+                  </select>
                 </>
               )}
-            </Button>
+
+              <Button
+                disabled={!isSelected && localOperatorId === ""}
+                onClick={() => {
+                  if (isSelected) return;
+                  onAction(Number(localOperatorId));
+                }}
+                className={`w-full h-14 text-lg font-black tracking-wide shadow-md transition-all ${
+                  isSelected
+                    ? "bg-slate-200 text-slate-500 hover:bg-slate-300 shadow-none"
+                    : "bg-blue-600 hover:bg-blue-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
+                }`}
+              >
+                {isSelected ? (
+                  "SELECCIONADO PARA GRUPO"
+                ) : (
+                  <>
+                    <Play className="w-5 h-5 mr-2 fill-current" />{" "}
+                    {isFinishing ? "INICIAR TERMINACIÓN" : "INICIAR IMPRESIÓN"}
+                  </>
+                )}
+              </Button>
+            </div>
           ) : (
             <Popover>
               <PopoverTrigger asChild>
@@ -453,7 +544,6 @@ const OperatorJobCard = ({
                   Empaquetado)
                 </Button>
 
-                {/* Solo las impresoras pueden derivar a terminación. Las de terminación no pueden derivar a OTRA terminación (a menos que quieras permitirlo, pero usualmente no es así). */}
                 {!isFinishing && (
                   <>
                     <div className="flex items-center gap-2 mb-2">

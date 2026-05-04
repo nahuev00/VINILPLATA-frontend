@@ -1,6 +1,6 @@
 // src/pages/OrdenesPage.tsx
-import { useState, useMemo, useEffect } from "react"; // 👈 Agregamos useEffect
-import { useQuery, useQueryClient } from "@tanstack/react-query"; // 👈 Agregamos useQueryClient
+import { useState, useMemo, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
   Search,
@@ -13,6 +13,7 @@ import {
   Filter,
   Check,
   Edit3,
+  History, // 👈 Importamos el nuevo ícono
 } from "lucide-react";
 
 import { getOrders } from "@/services/orderService";
@@ -35,21 +36,24 @@ import {
 import { OrderFormModal } from "@/components/OrderFormModal";
 import { OrderDetailsModal } from "@/components/OrderDetailsModal";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
+import { OrderLogsModal } from "@/components/OrderLogsModal"; // 👈 Importamos el nuevo modal
 import { useDebounce } from "@/hooks/useDebounce";
 
-// 👇 IMPORTAMOS EL HOOK DEL SOCKET 👇
 import { useSocket } from "@/context/SocketContext";
 
 const ALL_STATUSES = ["EN_PRODUCCION", "TERMINADO", "ENTREGADO", "CANCELADO"];
 type PaymentFilter = "ALL" | "PAID" | "UNPAID";
 
 export const OrdenesPage = () => {
-  const queryClient = useQueryClient(); // 👈 Instanciamos queryClient
-  const { socket } = useSocket(); // 👈 Instanciamos el socket
+  const queryClient = useQueryClient();
+  const { socket } = useSocket();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [orderToEdit, setOrderToEdit] = useState<any | null>(null);
+  // 👇 Nuevo estado para abrir el historial
+  const [orderLogsToView, setOrderLogsToView] = useState<any | null>(null);
+
   const [searchTerm, setSearchTerm] = useState("");
 
   const [statusFilter, setStatusFilter] = useState<string[]>([
@@ -63,10 +67,8 @@ export const OrdenesPage = () => {
   const { data: ordersRes, isLoading } = useQuery({
     queryKey: ["orders", debouncedSearch],
     queryFn: () => getOrders({ page: 1, limit: 100, search: debouncedSearch }),
-    // 👇 ELIMINAMOS refetchInterval: 30000 👇
   });
 
-  // 👇 NUEVA MAGIA: ESCUCHADOR EN TIEMPO REAL 👇
   useEffect(() => {
     if (!socket) return;
 
@@ -261,7 +263,7 @@ export const OrdenesPage = () => {
                 <TableHead className="font-bold text-slate-700 text-right">
                   Total
                 </TableHead>
-                <TableHead className="font-bold text-slate-700 text-center w-[100px]">
+                <TableHead className="font-bold text-slate-700 text-center w-[140px]">
                   Acciones
                 </TableHead>
               </TableRow>
@@ -373,9 +375,21 @@ export const OrdenesPage = () => {
 
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
+                          {/* 👇 Botón de Historial 👇 */}
                           <Button
                             variant="ghost"
                             size="icon"
+                            title="Ver Historial"
+                            onClick={() => setOrderLogsToView(order)}
+                            className="h-8 w-8 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
+                          >
+                            <History className="w-4 h-4" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Editar Orden"
                             onClick={() => {
                               setOrderToEdit(order);
                               setIsFormOpen(true);
@@ -388,6 +402,7 @@ export const OrdenesPage = () => {
                           <Button
                             variant="ghost"
                             size="icon"
+                            title="Ver Detalles"
                             onClick={() => setSelectedOrder(order)}
                             className="h-8 w-8 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
                           >
@@ -417,6 +432,12 @@ export const OrdenesPage = () => {
         onClose={() => setSelectedOrder(null)}
         order={selectedOrder}
         stations={[]}
+      />
+      {/* 👇 Añadimos el componente del modal de historial 👇 */}
+      <OrderLogsModal
+        isOpen={!!orderLogsToView}
+        onClose={() => setOrderLogsToView(null)}
+        order={orderLogsToView}
       />
     </div>
   );

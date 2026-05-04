@@ -6,7 +6,6 @@ import {
   Printer,
   CheckCircle2,
   ArrowRightLeft,
-  FileText,
   AlertCircle,
   Loader2,
   Scissors,
@@ -16,6 +15,7 @@ import {
   MapPin,
   Plus,
   Search,
+  HardHat, // 👈 Nuevo icono para el operario
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -250,7 +250,6 @@ export const ProduccionPage = () => {
 
       <div className="flex-1 overflow-x-auto pb-4">
         <div className="flex gap-6 min-w-max h-full items-start">
-          {/* 👇 COLUMNA: SIN ASIGNAR (AHORA SIEMPRE VISIBLE) 👇 */}
           <StationColumn
             title="Sin Asignar / En Espera"
             items={unassignedItems}
@@ -423,32 +422,6 @@ const ShippingOrderCard = ({ order, onDeliver }: any) => {
         )}
       </div>
 
-      <div className="mb-3">
-        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-          Contenido del paquete ({order.items.length}):
-        </p>
-        <ul className="text-[11px] text-slate-600 space-y-1.5 bg-white border border-slate-100 rounded p-2 shadow-inner max-h-[80px] overflow-y-auto">
-          {order.items.map((item: any) => (
-            <li
-              key={item.id}
-              className="flex gap-1.5 items-center justify-between"
-            >
-              <div className="flex gap-1.5 items-center truncate">
-                <span className="font-black text-slate-700 bg-slate-100 px-1 rounded">
-                  {item.copies}x
-                </span>
-                <span className="truncate">
-                  {item.fileName || "Diseño sin nombre"}
-                </span>
-              </div>
-              <span className="text-[8px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded border border-purple-200">
-                {item.status}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
       <Button
         onClick={() => onDeliver(order.id)}
         className="w-full h-9 bg-teal-500 hover:bg-teal-600 text-white font-bold text-xs shadow-sm"
@@ -470,7 +443,7 @@ const StationColumn = ({
   getMaterialName,
   onUpdate,
   onOpenDetails,
-  allPendingItems, // 👈 Recibimos todos los pendientes
+  allPendingItems,
 }: any) => {
   const isPackager = station?.role === "PACKAGER";
 
@@ -596,7 +569,7 @@ const StationColumn = ({
 };
 
 // ==========================================
-// SUBCOMPONENTE: TARJETA DE TRABAJO (ITEM)
+// SUBCOMPONENTE: TARJETA DE TRABAJO (ITEM) - 🔥 DISEÑO LIMPIO
 // ==========================================
 const JobCard = ({
   item,
@@ -605,7 +578,7 @@ const JobCard = ({
   getMaterialName,
   onUpdate,
   onOpenDetails,
-  allPendingItems, // 👈 Recibimos los pendientes
+  allPendingItems,
 }: any) => {
   const compatibleStations =
     stations?.filter((st: any) =>
@@ -615,8 +588,20 @@ const JobCard = ({
   const isFinishing = item.status === "TERMINACIONES";
   const isPrinting = item.status === "IMPRIMIENDO";
   const isReady = item.status === "REALIZADO";
-
   const isLocked = isPrinting || isFinishing;
+
+  // Lógica para encontrar el operario actual en base a los logs.
+  // Buscamos el log más reciente que coincida con el estado de impresión o terminación actual.
+  let currentOperatorName = "Operador no asignado";
+  if (isLocked && item.logs && item.logs.length > 0) {
+    const recentLog = [...item.logs]
+      .reverse()
+      .find((log: any) => log.status === item.status);
+
+    if (recentLog && recentLog.operator) {
+      currentOperatorName = recentLog.operator.name;
+    }
+  }
 
   return (
     <div
@@ -631,13 +616,14 @@ const JobCard = ({
       }`}
     >
       <div className="cursor-pointer" onClick={() => onOpenDetails(item)}>
-        <div className="flex justify-between items-start mb-2">
+        {/* ENCABEZADO: Cliente y Número de Orden */}
+        <div className="flex justify-between items-start mb-3">
           <div className="flex flex-col">
             <span className="text-xs font-black text-blue-600 hover:underline">
               {item.order.orderNumber}
             </span>
             <span
-              className="text-sm font-bold text-slate-900 truncate w-[220px]"
+              className="text-[15px] font-black text-slate-900 leading-tight truncate w-[250px]"
               title={item.order.client.name}
             >
               {item.order.client.name}
@@ -645,44 +631,64 @@ const JobCard = ({
           </div>
         </div>
 
-        <div className="bg-slate-50 p-2 rounded border border-slate-100 mb-3 relative z-0 hover:bg-slate-100 transition-colors">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-            <span
-              className="text-xs font-medium text-slate-700 truncate"
-              title={item.fileName || "Sin archivo"}
-            >
-              {item.fileName || "Sin archivo"}
-            </span>
-          </div>
+        {/* INFO LIMPIA: Material, Tamaño y Largo */}
+        <div className="bg-slate-50 p-2.5 rounded-md border border-slate-100 mb-3 space-y-2 hover:bg-slate-100 transition-colors">
           <div className="flex justify-between items-center text-xs">
-            <span className="font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+            <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">
+              Material:
+            </span>
+            <span className="font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
               {getMaterialName(item.materialId)}
             </span>
-            <span className="font-mono text-slate-600 bg-white px-1 border border-slate-200 rounded">
-              {item.widthMm}x{item.heightMm}{" "}
-              <span className="text-slate-400">({item.copies}u)</span>
+          </div>
+
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">
+              Tamaño:
+            </span>
+            <span className="font-mono text-slate-700 font-bold">
+              {item.widthMm} x {item.heightMm} mm{" "}
+              <span className="text-slate-400 font-sans ml-1">
+                ({item.copies}u)
+              </span>
             </span>
           </div>
-          <div className="mt-2 flex justify-end">
-            <span className="text-[10px] font-bold text-slate-500 bg-slate-200/50 px-1.5 py-0.5 rounded">
-              Largo: {itemML.toFixed(2)} ML
+
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">
+              Largo Lineal:
+            </span>
+            <span className="font-black text-slate-700">
+              {itemML.toFixed(2)} ML
             </span>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 relative z-10">
+      {/* ESTADO / ACCIONES */}
+      <div className="flex items-center justify-between pt-2 border-t border-slate-100 relative z-10">
         {isLocked ? (
           <div
-            className={`flex items-center gap-2 font-bold text-[11px] px-3 py-1.5 rounded-md w-full justify-center border shadow-inner ${
+            className={`flex flex-col items-center gap-1.5 px-2 py-2 rounded-md w-full justify-center border shadow-inner ${
               isFinishing
-                ? "text-amber-700 bg-amber-50 border-amber-200"
-                : "text-blue-700 bg-blue-50 border-blue-200"
+                ? "bg-amber-50 border-amber-200"
+                : "bg-blue-50 border-blue-200"
             }`}
           >
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            {isFinishing ? "EN TERMINACIÓN..." : "IMPRIMIENDO..."}
+            <div
+              className={`flex items-center gap-1.5 font-black text-[11px] tracking-wide ${
+                isFinishing ? "text-amber-700" : "text-blue-700"
+              }`}
+            >
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              {isFinishing ? "EN TERMINACIÓN..." : "IMPRIMIENDO..."}
+            </div>
+
+            {/* 👷‍♂️ AQUÍ SE MUESTRA EL OPERADOR */}
+            <div className="flex items-center gap-2 text-[14px] font-bold text-slate-600 bg-white px-3 py-0.5 rounded-full border border-slate-200 shadow-sm mt-0.5 uppercase">
+              <HardHat className="w-4 h-4 text-slate-400" />
+              {currentOperatorName}
+            </div>
           </div>
         ) : (
           <Popover>
@@ -690,7 +696,7 @@ const JobCard = ({
               <Button
                 variant="outline"
                 size="sm"
-                className={`h-7 text-[11px] px-2 font-medium w-full shadow-sm ${
+                className={`h-8 text-xs px-3 font-bold w-full shadow-sm ${
                   isReady
                     ? "bg-purple-50 border-purple-300 hover:bg-purple-100 text-purple-800"
                     : "bg-white hover:bg-slate-50 border-slate-300 text-slate-700"
