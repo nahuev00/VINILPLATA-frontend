@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Truck, LogOut, PackageCheck, Search } from "lucide-react";
 import { toast } from "sonner";
 
-import { updateOrder } from "@/services/orderService";
+import { updateOrder, updateOrderItem } from "@/services/orderService";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,16 +22,34 @@ export const EnviosPage = () => {
   // 1 línea reemplaza a todo el bloque de useQuery, useSocket y useEffect
   const { data: ordersRes, isLoading } = useRealtimeOrders("orders-shipping");
 
-  const deliverMut = useMutation({
-    mutationFn: async (orderId: number) => {
-      await updateOrder(orderId, { status: "ENTREGADO" });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders-shipping"] });
-      toast.success("¡Orden despachada con éxito!");
-    },
-    onError: () => toast.error("Error al actualizar la orden"),
-  });
+const deliverMut = useMutation({
+  mutationFn: async (currentOrder: any) => {
+    // 1. Verificación de seguridad
+    console.log("👉 Intentando despachar la orden:", currentOrder);
+
+    if (!currentOrder || !currentOrder.id) {
+      throw new Error("No se recibió una orden válida desde el botón.");
+    }
+
+    // 2. Generamos el log para cada ítem
+    const itemPromises =
+      currentOrder.items?.map((item: any) =>
+        updateOrderItem(item.id, { status: "ENTREGADO" }),
+      ) || [];
+    await Promise.all(itemPromises);
+
+    // 3. Actualizamos la orden general
+    return await updateOrder(currentOrder.id, { status: "ENTREGADO" });
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["orders-shipping"] });
+    toast.success("¡Orden despachada con éxito!");
+  },
+  onError: (err: any) => {
+    console.error("❌ Error en mutación:", err);
+    toast.error(err.message || "Error al actualizar la orden");
+  },
+});
 
   const allOrders = ordersRes?.data || [];
   const ordersToShip = allOrders.filter(
@@ -148,7 +166,8 @@ export const EnviosPage = () => {
               <ShippingOrderCard
                 key={order.id}
                 order={order}
-                onDeliver={() => deliverMut.mutate(order.id)}
+                // 👇 El () vacío asegura que no se cuele el MouseEvent del clic
+                onDeliver={() => deliverMut.mutate(order)}
                 isLoading={deliverMut.isPending}
               />
             ))}

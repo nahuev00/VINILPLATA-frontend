@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Printer, Loader2, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
-import { updateOrderItem, updateOrder } from "@/services/orderService";
+import { updateOrder, updateOrderItem } from "@/services/orderService";
 import { getStations } from "@/services/stationService";
 import { getMaterials } from "@/services/materialService";
 import { useRealtimeOrders } from "@/hooks/useRealTimeOrders";
@@ -52,15 +52,32 @@ export const ProduccionPage = () => {
     onError: () => toast.error("Error al actualizar el trabajo"),
   });
 
-  const updateOrderMut = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) =>
-      updateOrder(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders-production"] });
-      toast.success("¡Orden marcada como ENTREGADA!");
-    },
-    onError: () => toast.error("Error al actualizar la orden general"),
-  });
+const updateOrderMut = useMutation({
+  mutationFn: async (currentOrder: any) => {
+    // 1. Verificación de seguridad
+    if (!currentOrder || !currentOrder.id) {
+      throw new Error("No se recibió una orden válida.");
+    }
+
+    // 2. Generamos el log para cada ítem sin registrar usuario/estación
+    const itemPromises =
+      currentOrder.items?.map((item: any) =>
+        updateOrderItem(item.id, { status: "ENTREGADO" }),
+      ) || [];
+    await Promise.all(itemPromises);
+
+    // 3. Actualizamos la orden general
+    return await updateOrder(currentOrder.id, { status: "ENTREGADO" });
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["orders-production"] });
+    toast.success("¡Orden marcada como ENTREGADA!");
+  },
+  onError: (err: any) => {
+    console.error("❌ Error en mutación:", err);
+    toast.error(err.message || "Error al actualizar la orden general");
+  },
+});
 
   // 👇 OPTIMIZACIÓN: Memoizamos el cálculo de las listas de ítems 👇
   const { pendingItems, unassignedItems, packagingItems, shippingOrders } =
