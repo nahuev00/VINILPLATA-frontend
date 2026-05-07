@@ -19,6 +19,7 @@ export interface CreateStationDTO {
   name: string;
   username: string;
   password?: string;
+  role: string;
   printSpeedPerHour: number; // <-- NUEVO CAMPO
   materialIds?: number[];
   isFinishingStation: boolean;
@@ -28,6 +29,7 @@ export interface UpdateStationDTO {
   name?: string;
   username?: string;
   password?: string;
+  role: string;
   printSpeedPerHour?: number; // <-- NUEVO CAMPO
   materialIds?: number[];
   isFinishingStation: boolean;
