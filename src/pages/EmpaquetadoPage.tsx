@@ -83,7 +83,6 @@ export const EmpaquetadoPage = () => {
   const handlePrintLabels = () => {
     if (selectedOrderIds.length === 0) return;
 
-    // Configuración: [Ancho, Alto] en mm (6.4cm x 4.8cm)
     const doc = new jsPDF({
       orientation: "landscape",
       unit: "mm",
@@ -97,41 +96,49 @@ export const EmpaquetadoPage = () => {
     ordersToPrint.forEach((order: any, index: number) => {
       if (index > 0) doc.addPage([64, 48], "landscape");
 
+      // Variable para controlar la posición vertical actual
+      let currentY = 6;
+
       // 1. NÚMERO DE ORDEN
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text(`ORDEN: ${order.orderNumber}`, 4, 6);
+      doc.text(`ORDEN: ${order.orderNumber}`, 4, currentY);
 
-      // Línea divisoria
-      doc.setLineWidth(0.5);
-      doc.line(4, 8, 60, 8);
+      currentY += 2;
+      doc.setLineWidth(0.4);
+      doc.line(4, currentY, 60, currentY); // Línea divisoria
 
-      // 2. NOMBRE DEL CLIENTE
+      // 2. NOMBRE DEL CLIENTE (Con salto de línea automático)
+      currentY += 5;
       doc.setFontSize(11);
-      doc.text(order.client.name.toUpperCase(), 4, 13, { maxWidth: 56 });
+      const clientName = order.client?.name?.toUpperCase() || "SIN NOMBRE";
 
-      // 3. LOCALIDAD Y DIRECCIÓN
+      const nameLines = doc.splitTextToSize(clientName, 56);
+      doc.text(nameLines, 4, currentY);
+
+      // Movemos currentY según cuántas líneas ocupó el nombre
+      currentY += nameLines.length * 4.5;
+
+      // 3. LOCALIDAD
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(8.5); // Letra un poco más chica para que entre todo
-      const city = order.city?.name || "SIN LOCALIDAD";
-      const address = order.client.address || "SIN DIRECCIÓN";
+      doc.setFontSize(9);
+      const city = order.city?.name?.toUpperCase() || "SIN LOCALIDAD";
+      const cityLines = doc.splitTextToSize(`Loc: ${city}`, 56);
+      doc.text(cityLines, 4, currentY);
 
-      doc.text(`Loc: ${city.toUpperCase()}`, 4, 17, { maxWidth: 56 });
-      doc.text(`Dir: ${address.toUpperCase()}`, 4, 21, { maxWidth: 56 });
-
-      // 4. TIPO DE ENVÍO / TRANSPORTE (En recuadro resaltado)
+      // 4. TIPO DE ENVÍO (Sin el recuadro gris)
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
-      doc.setDrawColor(0);
-      doc.setFillColor(240, 240, 240); // Fondo gris claro
-      doc.rect(4, 24, 56, 7, "F");
-      const carrier = order.carrier?.name || order.shippingType || "A CONVENIR";
-      doc.text(`ENVÍO: ${carrier.toUpperCase()}`, 6, 29, { maxWidth: 52 });
+      const carrier = (
+        order.carrier?.name ||
+        order.shippingType ||
+        "A CONVENIR"
+      ).toUpperCase();
+      // Lo ponemos en la línea 29 para que tenga espacio suficiente
+      doc.text(`ENVÍO: ${carrier}`, 4, 29, { maxWidth: 56 });
 
-      // 5. VALOR EN EFECTIVO Y ELECTRÓNICO
-      doc.setFont("helvetica", "bold");
+      // 5. VALORES DE PAGO
       doc.setFontSize(8);
-
       const cash = (order.cashPayment || 0).toLocaleString("es-AR", {
         minimumFractionDigits: 2,
       });
@@ -139,22 +146,19 @@ export const EmpaquetadoPage = () => {
         minimumFractionDigits: 2,
       });
 
-      doc.text(`EFECTIVO: $${cash}`, 4, 35);
-      doc.text(`ELECTRÓNICO: $${elec}`, 4, 40);
+      doc.text(`EFECTIVO: $${cash}`, 4, 36);
+      doc.text(`ELECTRÓNICO: $${elec}`, 4, 41);
 
-      // Footer (Fecha e Ítems)
-      doc.setFont("helvetica", "italic");
+      // Footer
       doc.setFontSize(6);
-      doc.text(`Imp: ${new Date().toLocaleDateString("es-AR")}`, 4, 45);
-      doc.text(`Ítems: ${order.items?.length || 0}`, 48, 45);
+      doc.setFont("helvetica", "italic");
+      doc.text(`Imp: ${new Date().toLocaleDateString("es-AR")}`, 4, 46);
+      doc.text(`Ítems: ${order.items?.length || 0}`, 48, 46);
     });
 
-    // Abrir en nueva pestaña
     const blob = doc.output("blob");
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
-
-    // Limpiamos selección después de imprimir
     setSelectedOrderIds([]);
   };
 
