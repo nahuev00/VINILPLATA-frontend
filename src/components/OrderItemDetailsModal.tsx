@@ -12,7 +12,6 @@ import {
   Scissors,
   StickyNote,
   Printer,
-  Maximize,
 } from "lucide-react";
 
 export const OrderItemDetailsModal = ({
@@ -86,7 +85,7 @@ export const OrderItemDetailsModal = ({
                 <User className="w-3.5 h-3.5" /> Cliente
               </span>
               <span className="text-sm font-bold text-slate-900 block mt-1">
-                {item.order.client.name}
+                {item.order.client.searchName || item.order.client.name}
               </span>
             </div>
             <div>

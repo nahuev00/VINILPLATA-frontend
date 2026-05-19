@@ -28,6 +28,14 @@ export const ProduccionPage = () => {
     "ALL" | "PRINT" | "FINISH"
   >("ALL");
 
+  const [sortBy, setSortBy] = useState<
+    "promisedDate" | "orderNumber" | "createdAt"
+  >("promisedDate");
+
+  const [selectedUnassignedIds, setSelectedUnassignedIds] = useState<number[]>(
+    [],
+  );
+
   const { data: stations, isLoading: loadingStations } = useQuery({
     queryKey: ["stations-list"],
     queryFn: getStations,
@@ -93,17 +101,57 @@ const updateOrderMut = useMutation({
         ),
       );
 
+      const sortByPromisedDate = (a: any, b: any) => {
+        const aDate = a.order?.promisedDate;
+        const bDate = b.order?.promisedDate;
+        if (!aDate && !bDate) return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        if (!aDate) return 1;
+        if (!bDate) return -1;
+        const diff = new Date(aDate).getTime() - new Date(bDate).getTime();
+        if (diff !== 0) return diff;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      };
+
+      const unassigned = pending.filter((item: any) => !item.assignedToId);
+
+      const sorted = [...unassigned].sort((a: any, b: any) => {
+        switch (sortBy) {
+          case "promisedDate": {
+            const aDate = a.order?.promisedDate;
+            const bDate = b.order?.promisedDate;
+            if (!aDate && !bDate) return 0;
+            if (!aDate) return 1;
+            if (!bDate) return -1;
+            return (
+              new Date(aDate).getTime() - new Date(bDate).getTime()
+            );
+          }
+          case "orderNumber":
+            return (a.order?.orderNumber || "").localeCompare(
+              b.order?.orderNumber || "",
+              undefined,
+              { numeric: true },
+            );
+          case "createdAt":
+          default:
+            return (
+              new Date(a.createdAt).getTime() -
+              new Date(b.createdAt).getTime()
+            );
+        }
+      });
+
       return {
-        pendingItems: pending,
-        unassignedItems: pending.filter((item: any) => !item.assignedToId),
+        pendingItems: pending.sort(sortByPromisedDate),
+        unassignedItems: sorted,
         packagingItems: allItems.filter(
           (item: any) => item.status === "REALIZADO",
         ),
         shippingOrders: allOrders.filter(
-          (order: any) => order.status === "TERMINADO",
+          (order: any) => order.status === "EN_ENVIOS",
         ),
       };
-    }, [ordersRes]);
+    }, [ordersRes, sortBy]);
 
   // 👇 OPTIMIZACIÓN: Memoizamos el filtrado de las estaciones 👇
   const {
@@ -148,6 +196,55 @@ const updateOrderMut = useMutation({
     hideEmptyStations,
     pendingItems,
   ]);
+
+  const toggleUnassignedSelect = (id: number) => {
+    setSelectedUnassignedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
+    );
+  };
+
+  const canSelectItem = (item: any) => {
+    if (selectedUnassignedIds.length === 0) return true;
+    const allCandidateIds = [...selectedUnassignedIds, item.id];
+    const allCandidates = unassignedItems.filter((i: any) =>
+      allCandidateIds.includes(i.id),
+    );
+    return baseProductionStations.some((st: any) =>
+      allCandidates.every((c: any) =>
+        st.materials?.some((m: any) => m.id === c.materialId),
+      ),
+    );
+  };
+
+  const bulkAssignMut = useMutation({
+    mutationFn: async ({
+      ids,
+      stationId,
+    }: {
+      ids: number[];
+      stationId: number;
+    }) => {
+      await Promise.all(
+        ids.map((id) =>
+          updateOrderItem(id, {
+            status: "EN_COLA",
+            assignedToId: stationId,
+          }),
+        ),
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders-production"] });
+      toast.success(`${selectedUnassignedIds.length} trabajos asignados`);
+      setSelectedUnassignedIds([]);
+    },
+    onError: () => toast.error("Error al asignar los trabajos"),
+  });
+
+  const handleBulkAssign = (stationId: number) => {
+    if (selectedUnassignedIds.length === 0) return;
+    bulkAssignMut.mutate({ ids: selectedUnassignedIds, stationId });
+  };
 
   const getMaterialName = (id: number) =>
     materials?.find((m: any) => m.id === id)?.name || "Desconocido";
@@ -244,6 +341,13 @@ const updateOrderMut = useMutation({
             }
             onOpenDetails={setSelectedItem}
             allPendingItems={pendingItems}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            selectedIds={selectedUnassignedIds}
+            onToggleSelect={toggleUnassignedSelect}
+            onBulkAssign={handleBulkAssign}
+            isBulkAssigning={bulkAssignMut.isPending}
+            canSelectItem={canSelectItem}
           />
 
           {filteredProductionStations.map((station: any) => {

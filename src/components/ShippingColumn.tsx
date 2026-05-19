@@ -10,7 +10,7 @@ const MiniShippingOrderCard = ({ order, onDeliver }: any) => {
             {order.orderNumber}
           </span>
           <h4 className="text-sm font-bold text-slate-900 leading-tight mt-0.5">
-            {order.client.name}
+            {order.client.searchName || order.client.name}
           </h4>
         </div>
         <span className="bg-teal-100 text-teal-800 font-black px-2 py-1 rounded text-[10px] uppercase tracking-wider">

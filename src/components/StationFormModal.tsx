@@ -65,7 +65,7 @@ export const StationFormModal = ({
     formState: { errors },
     reset,
   } = useForm<StationFormValues>({
-    resolver: zodResolver(stationSchema),
+    resolver: zodResolver(stationSchema) as any,
     defaultValues: {
       name: "",
       username: "",

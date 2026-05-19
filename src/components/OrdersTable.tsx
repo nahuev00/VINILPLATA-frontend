@@ -9,6 +9,7 @@ import {
   Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -22,6 +23,9 @@ import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 interface OrdersTableProps {
   orders: any[];
   isLoading: boolean;
+  selectedIds: number[];
+  onToggleSelect: (id: number) => void;
+  onToggleSelectAll: () => void;
   onViewLogs: (order: any) => void;
   onEdit: (order: any) => void;
   onViewDetails: (order: any) => void;
@@ -30,14 +34,37 @@ interface OrdersTableProps {
 export const OrdersTable = ({
   orders,
   isLoading,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
   onViewLogs,
   onEdit,
   onViewDetails,
 }: OrdersTableProps) => {
+  const visibleOrders = orders.filter(
+    (o: any) => o.status !== "CANCELADO",
+  );
+  const allVisibleSelected =
+    visibleOrders.length > 0 &&
+    visibleOrders.every((o: any) => selectedIds.includes(o.id));
+
   return (
     <Table>
       <TableHeader className="bg-slate-50 sticky top-0 z-10 shadow-sm">
         <TableRow>
+          <TableHead className="w-10">
+            <Checkbox
+              checked={
+                visibleOrders.length > 0
+                  ? allVisibleSelected
+                    ? true
+                    : "indeterminate"
+                  : false
+              }
+              onCheckedChange={onToggleSelectAll}
+              aria-label="Seleccionar todo"
+            />
+          </TableHead>
           <TableHead className="font-bold text-slate-700">
             Orden / Fecha
           </TableHead>
@@ -62,14 +89,14 @@ export const OrdersTable = ({
       <TableBody>
         {isLoading ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center h-32 text-slate-500">
+            <TableCell colSpan={8} className="text-center h-32 text-slate-500">
               Cargando órdenes...
             </TableCell>
           </TableRow>
         ) : orders.length === 0 ? (
           <TableRow>
             <TableCell
-              colSpan={7}
+              colSpan={8}
               className="text-center h-32 text-slate-500 flex-col items-center justify-center"
             >
               <span className="block font-bold text-slate-600">
@@ -89,6 +116,15 @@ export const OrdersTable = ({
                 className={`hover:bg-slate-50 transition-colors ${isCancelled ? "opacity-60 bg-slate-50" : ""}`}
               >
                 <TableCell>
+                  {!isCancelled && (
+                    <Checkbox
+                      checked={selectedIds.includes(order.id)}
+                      onCheckedChange={() => onToggleSelect(order.id)}
+                      aria-label={`Seleccionar orden ${order.orderNumber}`}
+                    />
+                  )}
+                </TableCell>
+                <TableCell>
                   <span
                     className={`font-black block ${isCancelled ? "line-through text-slate-500" : "text-blue-700"}`}
                   >
@@ -101,7 +137,7 @@ export const OrdersTable = ({
                 </TableCell>
                 <TableCell>
                   <span className="font-bold text-slate-900 block text-sm">
-                    {order.client.name}
+                    {order.client.searchName || order.client.name}
                   </span>
                   <span
                     className="text-xs text-slate-500 truncate max-w-[200px] block"

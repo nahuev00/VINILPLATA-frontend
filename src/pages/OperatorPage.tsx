@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import {
   getOperators,
   createOperator,
-  type Operator,
 } from "@/services/operatorService";
 
 import { Button } from "@/components/ui/button";

@@ -10,6 +10,8 @@ import {
   Square,
   ArrowRight,
   HardHat,
+  Clock,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +32,7 @@ interface OperatorJobCardProps {
   userId?: number;
   isFinishing?: boolean;
   operators?: any[];
+  onReturnToQueue?: () => void;
 }
 
 export const OperatorJobCard = ({
@@ -44,6 +47,7 @@ export const OperatorJobCard = ({
   userId,
   isFinishing,
   operators,
+  onReturnToQueue,
 }: OperatorJobCardProps) => {
   const [localOperatorId, setLocalOperatorId] = useState<number | "">("");
 
@@ -72,11 +76,25 @@ export const OperatorJobCard = ({
       <div className="flex justify-between items-start border-b border-slate-100 pb-3 mb-3 pr-10">
         <div>
           <span className="text-lg font-black text-slate-900 block leading-tight">
-            {item.order.client.name}
+            {item.order.client.searchName || item.order.client.name}
           </span>
           <span className="text-sm font-bold text-blue-600">
             {item.order.orderNumber}
           </span>
+          {item.order.promisedDate && (
+            <span className="text-xs font-medium text-amber-600 flex items-center gap-1 mt-1">
+              <Clock className="w-3 h-3" />
+              Entrega:{" "}
+              {new Date(item.order.promisedDate).toLocaleDateString("es-AR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              })}
+            </span>
+          )}
         </div>
         <div className="text-right">
           <span className="text-xs text-slate-400 font-bold uppercase block mb-1">
@@ -206,11 +224,20 @@ export const OperatorJobCard = ({
                 </h4>
                 <Button
                   onClick={() => onAction(null)}
-                  className="w-full justify-start h-12 mb-3 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold border border-emerald-300"
+                  className="w-full justify-start h-12 mb-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold border border-emerald-300"
                 >
                   <CheckCircle2 className="w-5 h-5 mr-2" /> REALIZADO (A
                   Empaque)
                 </Button>
+
+                {onReturnToQueue && (
+                  <Button
+                    onClick={onReturnToQueue}
+                    className="w-full justify-start h-12 mb-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold border border-slate-300"
+                  >
+                    <RotateCcw className="w-5 h-5 mr-2" /> Volver a la cola
+                  </Button>
+                )}
 
                 {!isFinishing && (
                   <>

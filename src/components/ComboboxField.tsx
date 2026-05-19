@@ -42,7 +42,7 @@ export const ComboboxField = ({
   }, [field.value, data]);
 
   const getSearchValue = (item: any) =>
-    item.code ? `${item.code} ${item.name}` : item.name;
+    item.code ? `${item.code} ${item.searchName || item.name}` : (item.searchName || item.name);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -61,7 +61,7 @@ export const ComboboxField = ({
                     [{selectedItem.code}]
                   </span>
                 )}
-                {selectedItem.name}
+                {selectedItem.searchName || selectedItem.name}
               </>
             ) : (
               <span className="text-slate-500">{placeholder}</span>
@@ -105,7 +105,7 @@ export const ComboboxField = ({
                         [{item.code}]
                       </span>
                     )}
-                    {item.name}
+                    {item.searchName || item.name}
                   </span>
                 </CommandItem>
               ))}

@@ -12,7 +12,6 @@ import {
   Truck,
   Layers,
   Scissors,
-  MessageSquare,
   Printer, // 👈 Nuevo icono
   CheckSquare, // 👈 Nuevo icono
   Square, // 👈 Nuevo icono
@@ -66,7 +65,7 @@ export const EmpaquetadoPage = () => {
         updateOrderItem(item.id, { status: "EMPAQUETADO" }),
       );
       await Promise.all(itemPromises);
-      await updateOrder(order.id, { status: "TERMINADO" });
+      await updateOrder(order.id, { status: "EN_ENVIOS" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders-packaging"] });
@@ -91,7 +90,7 @@ export const EmpaquetadoPage = () => {
 
     const ordersToPrint = ordersRes?.data.filter((o: any) =>
       selectedOrderIds.includes(o.id),
-    );
+    ) || [];
 
     ordersToPrint.forEach((order: any, index: number) => {
       if (index > 0) doc.addPage([64, 48], "landscape");
@@ -152,7 +151,10 @@ export const EmpaquetadoPage = () => {
       // Footer
       doc.setFontSize(6);
       doc.setFont("helvetica", "italic");
-      doc.text(`Imp: ${new Date().toLocaleDateString("es-AR")}`, 4, 46);
+      const labelDate = order.promisedDate
+        ? new Date(order.promisedDate).toLocaleDateString("es-AR")
+        : "A convenir";
+      doc.text(`Entrega: ${labelDate}`, 4, 46);
       doc.text(`Ítems: ${order.items?.length || 0}`, 48, 46);
     });
 
@@ -178,7 +180,7 @@ export const EmpaquetadoPage = () => {
   const allOrders = ordersRes?.data || [];
   const ordersToPackage = allOrders.filter(
     (order: any) =>
-      !["TERMINADO", "ENTREGADO", "CANCELADO"].includes(order.status) &&
+      ["EN_PRODUCCION", "EN_EMPAQUETADO"].includes(order.status) &&
       order.items.some((item: any) => item.status === "REALIZADO"),
   );
 
@@ -317,7 +319,7 @@ const OrderPackageCard = ({
             ORDEN {order.orderNumber}
           </span>
           <h3 className="text-xl font-black text-slate-900 leading-tight">
-            {order.client.name}
+            {order.client.searchName || order.client.name}
           </h3>
         </div>
       </div>

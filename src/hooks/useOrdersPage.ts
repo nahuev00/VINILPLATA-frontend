@@ -8,6 +8,8 @@ import { useSocket } from "@/context/SocketContext";
 export type PaymentFilter = "ALL" | "PAID" | "UNPAID";
 export const ALL_STATUSES = [
   "EN_PRODUCCION",
+  "EN_EMPAQUETADO",
+  "EN_ENVIOS",
   "TERMINADO",
   "ENTREGADO",
   "CANCELADO",
@@ -20,6 +22,8 @@ export const useOrdersPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([
     "EN_PRODUCCION",
+    "EN_EMPAQUETADO",
+    "EN_ENVIOS",
     "TERMINADO",
   ]);
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("ALL");

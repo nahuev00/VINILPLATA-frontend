@@ -2,7 +2,6 @@
 import {
   LayoutDashboard,
   Users,
-  FilePlus,
   Files,
   MonitorPlay,
   PersonStanding,

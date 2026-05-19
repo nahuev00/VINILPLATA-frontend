@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { type Order, updateOrder } from "@/services/orderService";
+import { type Order, type UpdateOrderData, updateOrder } from "@/services/orderService";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 
 interface OrderDetailsModalProps {
@@ -81,7 +81,7 @@ export const OrderDetailsModal = ({
   });
 
   const updateStatusMut = useMutation({
-    mutationFn: async (data: Partial<Order>) => {
+    mutationFn: async (data: UpdateOrderData) => {
       if (!order) throw new Error("No hay orden");
       await updateOrder(order.id, data);
     },
@@ -182,9 +182,9 @@ export const OrderDetailsModal = ({
             </span>
             <span
               className="text-sm font-bold text-slate-900 block mt-1 truncate"
-              title={order.client.name}
+              title={order.client.searchName || order.client.name}
             >
-              {order.client.name}
+              {order.client.searchName || order.client.name}
             </span>
           </div>
           <div className="col-span-1">

@@ -53,7 +53,7 @@ const deliverMut = useMutation({
 
   const allOrders = ordersRes?.data || [];
   const ordersToShip = allOrders.filter(
-    (order: any) => order.status === "TERMINADO",
+    (order: any) => order.status === "EN_ENVIOS",
   );
 
   const filteredOrders = useMemo(() => {

@@ -80,12 +80,27 @@ export const EstacionDashboardPage = () => {
       (item: any) => item.assignedToId === user?.id,
     );
 
+    const sortByPromisedDate = (a: any, b: any) => {
+      const aDate = a.order?.promisedDate;
+      const bDate = b.order?.promisedDate;
+      if (!aDate && !bDate) return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      if (!aDate) return 1;
+      if (!bDate) return -1;
+      const diff = new Date(aDate).getTime() - new Date(bDate).getTime();
+      if (diff !== 0) return diff;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    };
+
     return {
-      enColaItems: myItems.filter((item: any) => item.status === "EN_COLA"),
-      activosItems: myItems.filter(
-        (item: any) =>
-          item.status === "IMPRIMIENDO" || item.status === "TERMINACIONES",
-      ),
+      enColaItems: myItems
+        .filter((item: any) => item.status === "EN_COLA")
+        .sort(sortByPromisedDate),
+      activosItems: myItems
+        .filter(
+          (item: any) =>
+            item.status === "IMPRIMIENDO" || item.status === "TERMINACIONES",
+        )
+        .sort(sortByPromisedDate),
     };
   }, [ordersRes, user?.id]);
 
@@ -119,6 +134,13 @@ export const EstacionDashboardPage = () => {
             stationId: user?.id,
           }
         : { status: "REALIZADO", assignedToId: null, stationId: user?.id },
+    });
+  };
+
+  const handleReturnToQueue = (itemId: number) => {
+    updateMut.mutate({
+      id: itemId,
+      data: { status: "EN_COLA", assignedToId: user?.id },
     });
   };
 
@@ -293,6 +315,7 @@ export const EstacionDashboardPage = () => {
                   onAction={(nextStationId: number | null) =>
                     handleFinish(item.id, nextStationId)
                   }
+                  onReturnToQueue={() => handleReturnToQueue(item.id)}
                   actionType="FINISH"
                   stations={stations}
                   userId={user?.id}

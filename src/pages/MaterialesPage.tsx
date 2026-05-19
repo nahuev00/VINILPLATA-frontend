@@ -60,7 +60,7 @@ export const MaterialesPage = () => {
   });
 
   const deleteMut = useMutation({
-    mutationFn: deleteMaterial,
+    mutationFn: (id: number) => deleteMaterial(id, {} as any),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["materials"] });
       toast.success("Material eliminado");
@@ -238,7 +238,7 @@ const MaterialFormModal = ({ isOpen, onClose, material }: any) => {
     formState: { errors },
     reset,
   } = useForm<MaterialFormValues>({
-    resolver: zodResolver(materialSchema),
+    resolver: zodResolver(materialSchema) as any,
     defaultValues: {
       name: "",
       category: "",

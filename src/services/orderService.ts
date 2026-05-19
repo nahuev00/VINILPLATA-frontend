@@ -3,15 +3,21 @@
 export type OrderStatus =
   | "PRESUPUESTADO"
   | "EN_PRODUCCION"
+  | "EN_EMPAQUETADO"
+  | "EN_ENVIOS"
   | "TERMINADO"
   | "ENTREGADO"
   | "CANCELADO";
 export type ItemStatus =
   | "PREIMPRESION"
   | "EN_COLA"
+  | "IMPRIMIENDO"
   | "IMPRESO"
   | "TERMINACIONES"
-  | "REALIZADO";
+  | "REALIZADO"
+  | "EMPAQUETADO"
+  | "ENTREGADO"
+  | "CANCELADO";
 
 export interface OrderItem {
   id: number;
@@ -48,7 +54,8 @@ export interface Order {
   total: number;
   electronicPayment: number;
   cashPayment: number;
-  invoiceType?: string | null;
+  isPaid?: boolean;
+  invoiceType?: { name: string } | null;
   invoiceNumber?: string | null;
   notes?: string | null;
   createdAt: string;
@@ -56,6 +63,7 @@ export interface Order {
   client: {
     name: string;
     code: string;
+    searchName?: string;
   };
   seller: {
     name: string;
@@ -122,8 +130,10 @@ export interface UpdateOrderData {
   electronicPayment?: number;
   cashPayment?: number;
   invoiceType?: string;
+  invoiceNumber?: string;
+  isPaid?: boolean;
   notes?: string;
-  status?: OrderStatus; // O string, dependiendo de cómo lo tengas tipado
+  status?: OrderStatus;
 }
 
 const API_BASE_URL =
@@ -158,7 +168,7 @@ export const createOrder = async (data: CreateOrderDTO): Promise<Order> => {
 
 export const updateOrderItem = async (
   itemId: number,
-  data: { assignedToId?: number | null; status?: ItemStatus },
+  data: { assignedToId?: number | null; status?: ItemStatus; operatorId?: number; stationId?: number; [key: string]: any },
 ) => {
   const res = await fetch(`${API_BASE_URL}/orders/items/${itemId}`, {
     method: "PATCH",

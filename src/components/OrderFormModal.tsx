@@ -9,9 +9,11 @@ import {
   FileText,
   Banknote,
   Trash2,
+  Copy,
   Printer,
   Truck,
   Edit3,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,13 +38,12 @@ import {
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { ComboboxField } from "./ComboboxField";
+import { ComboboxFieldMaterial } from "./ComboboxFieldMaterial";
 
 // --- SCHEMAS (Con protección contra strings vacíos) ---
 const orderItemSchema = z.object({
@@ -66,7 +67,7 @@ const orderItemSchema = z.object({
     .optional()
     .nullable()
     .transform((val) => (val === "" ? null : val)),
-  unitPrice: z.number().min(0),
+  unitPrice: z.number().optional(),
   subtotal: z.number().min(0),
 });
 
@@ -116,25 +117,35 @@ const OrderItemCard = ({
   control,
   register,
   remove,
-  setValue,
+  append,
   groupedMaterials,
 }: any) => {
   const w = useWatch({ control, name: `items.${index}.widthMm` }) || 0;
   const h = useWatch({ control, name: `items.${index}.heightMm` }) || 0;
   const copies = useWatch({ control, name: `items.${index}.copies` }) || 1;
-  const unitPrice =
-    useWatch({ control, name: `items.${index}.unitPrice` }) || 0;
+
+  const currentItem = useWatch({ control, name: `items.${index}` });
 
   const areaVisual = ((w * h) / 1000000) * copies;
-  const calculatedSubtotal = unitPrice * copies;
 
-  useEffect(() => {
-    setValue(`items.${index}.subtotal`, calculatedSubtotal);
-  }, [calculatedSubtotal, setValue, index]);
+  const handleDuplicate = () => {
+    if (!currentItem) return;
+    const { id, ...rest } = currentItem;
+    append(rest);
+  };
 
   return (
     <div className="relative bg-slate-50/50 border border-slate-200 rounded-md p-4 shadow-sm">
-      <div className="absolute top-2 right-2">
+      <div className="absolute top-2 right-2 flex items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={handleDuplicate}
+          className="h-6 w-6 text-blue-400 hover:text-blue-600 hover:bg-blue-50"
+        >
+          <Copy className="w-4 h-4" />
+        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -158,41 +169,10 @@ const OrderItemCard = ({
             name={`items.${index}.materialId`}
             control={control}
             render={({ field }) => (
-              <Select
-                value={field.value?.toString() || ""}
-                onValueChange={(val) => field.onChange(Number(val))}
-              >
-                <SelectTrigger className="w-full h-8 bg-white text-sm">
-                  <SelectValue placeholder="Elegir material" />
-                </SelectTrigger>
-                {/* 👇 Ajuste de ancho agregado aquí 👇 */}
-                <SelectContent
-                  position="popper"
-                  className="bg-white max-h-[300px] w-[var(--radix-select-trigger-width)]"
-                >
-                  {Object.entries(groupedMaterials || {}).map(
-                    ([category, mats]: [string, any]) => (
-                      <SelectGroup key={category}>
-                        <SelectLabel className="bg-slate-100 text-blue-800 font-black tracking-wider uppercase text-[10px] py-1 px-2 mb-1">
-                          {category}
-                        </SelectLabel>
-                        {mats.map((m: any) => (
-                          <SelectItem
-                            key={m.id}
-                            value={m.id.toString()}
-                            className="pl-6 text-xs cursor-pointer"
-                          >
-                            {m.name}{" "}
-                            <span className="text-slate-400 font-mono ml-2 font-bold">
-                              ({m.width?.toFixed(2)}m)
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    ),
-                  )}
-                </SelectContent>
-              </Select>
+              <ComboboxFieldMaterial
+                field={field}
+                groupedMaterials={groupedMaterials}
+              />
             )}
           />
         </div>
@@ -266,26 +246,15 @@ const OrderItemCard = ({
             {areaVisual.toFixed(2)}
           </span>
         </div>
-        <div className="col-span-6 md:col-span-4">
+        <div className="col-span-6 md:col-span-6">
           <label className="text-[11px] font-semibold text-slate-500 mb-1 block uppercase">
-            Precio Unit. ($)
+            Precio ($)
           </label>
           <Input
             type="number"
             step="0.01"
-            {...register(`items.${index}.unitPrice`, { valueAsNumber: true })}
+            {...register(`items.${index}.subtotal`, { valueAsNumber: true })}
             className="h-8 bg-white font-semibold text-sm"
-          />
-        </div>
-        <div className="col-span-6 md:col-span-4">
-          <label className="text-[11px] font-semibold text-slate-500 mb-1 block uppercase">
-            Subtotal ($)
-          </label>
-          <Input
-            type="number"
-            {...register(`items.${index}.subtotal`)}
-            readOnly
-            className="h-8 bg-slate-100 font-bold pointer-events-none text-sm border-transparent"
           />
         </div>
       </div>
@@ -298,10 +267,12 @@ export const OrderFormModal = ({
   isOpen,
   onClose,
   orderToEdit,
+  storageKey,
 }: {
   isOpen: boolean;
   onClose: () => void;
   orderToEdit?: any;
+  storageKey?: string;
 }) => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -341,12 +312,21 @@ export const OrderFormModal = ({
   }, [materials]);
 
   const defaultEmptyValues = {
-    sellerId: user?.id || 0,
+    clientId: 0,
+    sellerId: 0,
+    title: "",
+    shippingType: "",
+    carrierId: null,
+    cityId: null,
+    promisedDate: "",
     total: 0,
     electronicPayment: 0,
     cashPayment: 0,
+    invoiceTypeId: null,
+    notes: "",
+    invoiceNumber: "",
     isPaid: false,
-    items: [{ widthMm: 0, heightMm: 0, copies: 1, unitPrice: 0, subtotal: 0 }],
+    items: [],
   };
 
   const {
@@ -356,12 +336,13 @@ export const OrderFormModal = ({
     formState: { errors },
     reset,
     setValue,
+    watch,
   } = useForm<OrderFormValues>({
-    resolver: zodResolver(orderSchema),
+    resolver: zodResolver(orderSchema) as any,
     defaultValues: defaultEmptyValues,
   });
 
-  const { fields, append, remove } = useFieldArray({ control, name: "items" });
+  const { fields, append, remove, replace } = useFieldArray({ control, name: "items" });
   const watchedItems = useWatch({ control, name: "items" }) || [];
   const calculatedTotal = watchedItems.reduce(
     (sum, item) => sum + (item.subtotal || 0),
@@ -394,12 +375,30 @@ export const OrderFormModal = ({
           })),
         });
         setClientSearch(orderToEdit.client?.name || "");
-      } else {
-        reset(defaultEmptyValues);
-        setClientSearch("");
+      } else if (storageKey) {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            reset(parsed);
+            if (parsed.clientSearch) setClientSearch(parsed.clientSearch);
+          } catch {
+            localStorage.removeItem(storageKey);
+          }
+        }
       }
     }
-  }, [isOpen, orderToEdit, reset]);
+  }, [isOpen, orderToEdit, reset, storageKey]);
+
+  // Persistir borrador a localStorage en cada cambio del formulario
+  useEffect(() => {
+    if (!storageKey) return;
+    const sub = watch((values: any) => {
+      const toSave = { ...values, clientSearch };
+      localStorage.setItem(storageKey, JSON.stringify(toSave));
+    });
+    return () => sub.unsubscribe();
+  }, [storageKey, watch, clientSearch]);
 
   const watchedClientId = useWatch({ control, name: "clientId" });
   useEffect(() => {
@@ -421,6 +420,25 @@ export const OrderFormModal = ({
     toast.success(
       orderToEdit ? "Orden actualizada con éxito" : "Orden creada con éxito",
     );
+    if (!orderToEdit) {
+      replace([]);
+      setValue("clientId", 0);
+      setValue("sellerId", 0);
+      setValue("title", "");
+      setValue("shippingType", "");
+      setValue("carrierId", null);
+      setValue("cityId", null);
+      setValue("promisedDate", "");
+      setValue("total", 0);
+      setValue("electronicPayment", 0);
+      setValue("cashPayment", 0);
+      setValue("invoiceTypeId", null);
+      setValue("notes", "");
+      setValue("invoiceNumber", "");
+      setValue("isPaid", false);
+      setClientSearch("");
+      if (storageKey) localStorage.removeItem(storageKey);
+    }
     onClose();
   };
 
@@ -444,11 +462,13 @@ export const OrderFormModal = ({
 
     const itemsFormateados = data.items.map((item) => ({
       ...item,
+      unitPrice: item.subtotal,
       areaM2: ((item.widthMm * item.heightMm) / 1000000) * item.copies,
     }));
 
     const payload = {
       ...data,
+      sellerId: user?.id || data.sellerId,
       promisedDate: fechaCorregida,
       items: itemsFormateados,
     };
@@ -467,8 +487,6 @@ export const OrderFormModal = ({
       open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
-          reset();
-          setClientSearch("");
           onClose();
         }
       }}
@@ -482,7 +500,36 @@ export const OrderFormModal = ({
                 Editando Orden: {orderToEdit.orderNumber}
               </>
             ) : (
-              "Nueva Orden de Trabajo"
+              <>
+                Nueva Orden de Trabajo
+                <button
+                  type="button"
+                  onClick={() => {
+                    replace([]);
+                    setValue("clientId", 0);
+                    setValue("sellerId", 0);
+                    setValue("title", "");
+                    setValue("shippingType", "");
+                    setValue("carrierId", null);
+                    setValue("cityId", null);
+                    setValue("promisedDate", "");
+                    setValue("total", 0);
+                    setValue("electronicPayment", 0);
+                    setValue("cashPayment", 0);
+                    setValue("invoiceTypeId", null);
+                    setValue("notes", "");
+                    setValue("invoiceNumber", "");
+                    setValue("isPaid", false);
+                    setClientSearch("");
+                    if (storageKey) localStorage.removeItem(storageKey);
+                  }}
+                  className="ml-auto text-xs font-medium text-slate-400 hover:text-red-600 transition-colors flex items-center gap-1"
+                  title="Limpiar formulario"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Nuevo
+                </button>
+              </>
             )}
           </DialogTitle>
         </DialogHeader>
@@ -638,10 +685,12 @@ export const OrderFormModal = ({
                 onClick={() =>
                   append({
                     materialId: 0,
+                    fileName: null,
                     widthMm: 0,
                     heightMm: 0,
                     copies: 1,
-                    unitPrice: 0,
+                    finishing: null,
+                    notes: null,
                     subtotal: 0,
                   })
                 }
@@ -660,7 +709,7 @@ export const OrderFormModal = ({
                   control={control}
                   register={register}
                   remove={remove}
-                  setValue={setValue}
+                  append={append}
                   groupedMaterials={groupedMaterials}
                 />
               ))}

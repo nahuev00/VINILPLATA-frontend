@@ -24,6 +24,10 @@ export const JobCard = ({
   onUpdate,
   onOpenDetails,
   allPendingItems,
+  selectionMode,
+  isSelected,
+  canSelect,
+  onToggleSelect,
 }: any) => {
   const compatibleStations =
     stations?.filter((st: any) =>
@@ -45,9 +49,15 @@ export const JobCard = ({
     }
   }
 
-  return (
-    <div
-      className={`bg-white rounded-lg border shadow-sm p-3 transition-all relative ${
+  const cardClasses = selectionMode
+    ? `bg-white rounded-lg border shadow-sm p-3 transition-all relative ${
+        isSelected
+          ? "border-blue-400 ring-2 ring-blue-300 bg-blue-50/30"
+          : !canSelect
+            ? "border-slate-200 opacity-50"
+            : "border-slate-200 hover:border-blue-300 hover:shadow-md cursor-pointer"
+      }`
+    : `bg-white rounded-lg border shadow-sm p-3 transition-all relative ${
         isLocked
           ? isFinishing
             ? "border-amber-400 shadow-amber-100 ring-1 ring-amber-400 ring-offset-1"
@@ -55,9 +65,20 @@ export const JobCard = ({
           : isReady
             ? "border-purple-400 shadow-purple-100 ring-1 ring-purple-400 ring-offset-1"
             : "border-slate-200 hover:shadow-md hover:border-blue-300"
-      }`}
+      }`;
+
+  return (
+    <div
+      className={cardClasses}
+      onClick={
+        selectionMode && canSelect
+          ? () => onToggleSelect?.()
+          : selectionMode
+            ? undefined
+            : () => onOpenDetails(item)
+      }
     >
-      <div className="cursor-pointer" onClick={() => onOpenDetails(item)}>
+      <div className={selectionMode ? "" : "cursor-pointer"}>
         <div className="flex justify-between items-start mb-3">
           <div className="flex flex-col">
             <span className="text-xs font-black text-blue-600 hover:underline">
@@ -65,10 +86,23 @@ export const JobCard = ({
             </span>
             <span
               className="text-[15px] font-black text-slate-900 leading-tight truncate w-[250px]"
-              title={item.order.client.name}
+              title={item.order.client.searchName || item.order.client.name}
             >
-              {item.order.client.name}
+              {item.order.client.searchName || item.order.client.name}
             </span>
+            {item.order.promisedDate && (
+              <span className="text-[10px] font-medium text-amber-600 flex items-center gap-1 mt-0.5">
+                <Clock className="w-3 h-3" />
+                Entrega:{" "}
+                {new Date(item.order.promisedDate).toLocaleDateString("es-AR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                })}
+              </span>
+            )}
           </div>
         </div>
 
@@ -103,134 +137,232 @@ export const JobCard = ({
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-2 border-t border-slate-100 relative z-10">
-        {isLocked ? (
-          <div
-            className={`flex flex-col items-center gap-1.5 px-2 py-2 rounded-md w-full justify-center border shadow-inner ${
-              isFinishing
-                ? "bg-amber-50 border-amber-200"
-                : "bg-blue-50 border-blue-200"
-            }`}
-          >
-            <div
-              className={`flex items-center gap-1.5 font-black text-[11px] tracking-wide ${
-                isFinishing ? "text-amber-700" : "text-blue-700"
-              }`}
-            >
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              {isFinishing ? "EN TERMINACIÓN..." : "IMPRIMIENDO..."}
-            </div>
-            <div className="flex items-center gap-2 text-[14px] font-bold text-slate-600 bg-white px-3 py-0.5 rounded-full border border-slate-200 shadow-sm mt-0.5 uppercase">
-              <HardHat className="w-4 h-4 text-slate-400" />
-              {currentOperatorName}
-            </div>
-          </div>
-        ) : (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className={`h-8 text-xs px-3 font-bold w-full shadow-sm ${
-                  isReady
-                    ? "bg-purple-50 border-purple-300 hover:bg-purple-100 text-purple-800"
-                    : "bg-white hover:bg-slate-50 border-slate-300 text-slate-700"
+      {!selectionMode && (
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100 relative z-10">
+          {isLocked ? (
+            <div className="w-full space-y-2">
+              <div
+                className={`flex items-center justify-between px-2 py-1.5 rounded-md border shadow-inner ${
+                  isFinishing
+                    ? "bg-amber-50 border-amber-200"
+                    : "bg-blue-50 border-blue-200"
                 }`}
               >
-                {isReady ? (
-                  <>
-                    <Package className="w-3.5 h-3.5 mr-1.5" /> Esperando Empaque
-                  </>
-                ) : (
-                  <>
-                    <ArrowRightLeft className="w-3.5 h-3.5 mr-1.5" /> Reasignar
-                    Trabajo
-                  </>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="w-64 p-2 bg-white shadow-2xl border border-slate-200 z-50 rounded-lg"
-              align="start"
-            >
-              <span className="text-xs font-bold text-slate-500 mb-2.5 block uppercase tracking-wider pl-1">
-                {isReady ? "Corregir asignación:" : "Reasignar a:"}
-              </span>
-              <div className="flex flex-col gap-1.5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="justify-start h-8 text-xs font-medium text-amber-700 hover:text-amber-800 hover:bg-amber-100 border border-transparent hover:border-amber-200"
-                  onClick={() =>
-                    onUpdate(item.id, {
-                      assignedToId: null,
-                      status: "PREIMPRESION",
-                    })
-                  }
+                <div
+                  className={`flex items-center gap-1.5 font-black text-[11px] tracking-wide ${
+                    isFinishing ? "text-amber-700" : "text-blue-700"
+                  }`}
                 >
-                  Devolver a Espera / Preimpresión
-                </Button>
-                <div className="h-px bg-slate-100 my-0.5"></div>
-                {compatibleStations.length > 0 ? (
-                  compatibleStations.map((st: any) => {
-                    const stItems =
-                      allPendingItems?.filter(
-                        (i: any) => i.assignedToId === st.id,
-                      ) || [];
-                    const stTotalML = stItems.reduce((sum: number, i: any) => {
-                      const ml =
-                        i.linearMeters > 0
-                          ? i.linearMeters
-                          : ((i.heightMm || 0) / 1000) * (i.copies || 1);
-                      return sum + ml;
-                    }, 0);
-                    const stSpeed = st.printSpeedPerHour || 10;
-                    const stRawHours = stSpeed > 0 ? stTotalML / stSpeed : 0;
-                    const stDisplayTime = formatHoursAndMinutes(stRawHours);
-
-                    return (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  {isFinishing ? "EN TERMINACIÓN..." : "IMPRIMIENDO..."}
+                </div>
+                <div className="flex items-center gap-2 text-[12px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-full border border-slate-200 shadow-sm uppercase">
+                  <HardHat className="w-3.5 h-3.5 text-slate-400" />
+                  {currentOperatorName}
+                </div>
+              </div>
+              <div onClick={(e) => e.stopPropagation()}>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[10px] px-2 font-bold w-full bg-white hover:bg-slate-50 border-slate-300 text-slate-600"
+                    >
+                      <ArrowRightLeft className="w-3 h-3 mr-1" /> Reasignar
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-64 p-2 bg-white shadow-2xl border border-slate-200 z-50 rounded-lg"
+                    align="start"
+                  >
+                    <span className="text-xs font-bold text-slate-500 mb-2.5 block uppercase tracking-wider pl-1">
+                      Reasignar a:
+                    </span>
+                    <div className="flex flex-col gap-1.5">
                       <Button
-                        key={st.id}
                         variant="ghost"
                         size="sm"
-                        className="justify-start h-8 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-100 border border-transparent flex w-full items-center"
+                        className="justify-start h-8 text-xs font-medium text-amber-700 hover:text-amber-800 hover:bg-amber-100 border border-transparent hover:border-amber-200"
                         onClick={() =>
                           onUpdate(item.id, {
-                            assignedToId: st.id,
-                            status: "EN_COLA",
+                            assignedToId: null,
+                            status: "PREIMPRESION",
                           })
                         }
                       >
-                        <span className="truncate max-w-[120px]">
-                          {st.name}
-                        </span>
-                        <span
-                          className={`ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                            st.isFinishingStation
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-blue-100 text-blue-700"
-                          }`}
-                        >
-                          {st.isFinishingStation ? "Corte" : "Impresión"}
-                        </span>
-                        <span className="ml-auto text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1 border border-slate-200">
-                          <Clock className="w-2.5 h-2.5 text-slate-400" />{" "}
-                          {stDisplayTime}
-                        </span>
+                        Devolver a Espera / Preimpresión
                       </Button>
-                    );
-                  })
-                ) : (
-                  <div className="text-[10px] text-amber-700 italic px-2 py-2 leading-relaxed border border-amber-200 bg-amber-50 rounded-md shadow-inner">
-                    Ninguna otra máquina es compatible con{" "}
-                    {getMaterialName(item.materialId)}.
-                  </div>
-                )}
+                      <div className="h-px bg-slate-100 my-0.5"></div>
+                      {compatibleStations.length > 0 ? (
+                        compatibleStations.map((st: any) => {
+                          const stItems =
+                            allPendingItems?.filter(
+                              (i: any) => i.assignedToId === st.id,
+                            ) || [];
+                          const stTotalML = stItems.reduce((sum: number, i: any) => {
+                            const ml =
+                              i.linearMeters > 0
+                                ? i.linearMeters
+                                : ((i.heightMm || 0) / 1000) * (i.copies || 1);
+                            return sum + ml;
+                          }, 0);
+                          const stSpeed = st.printSpeedPerHour || 10;
+                          const stRawHours = stSpeed > 0 ? stTotalML / stSpeed : 0;
+                          const stDisplayTime = formatHoursAndMinutes(stRawHours);
+
+                          return (
+                            <Button
+                              key={st.id}
+                              variant="ghost"
+                              size="sm"
+                              className="justify-start h-8 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-100 border border-transparent flex w-full items-center"
+                              onClick={() =>
+                                onUpdate(item.id, {
+                                  assignedToId: st.id,
+                                  status: "EN_COLA",
+                                })
+                              }
+                            >
+                              <span className="truncate max-w-[120px]">
+                                {st.name}
+                              </span>
+                              <span
+                                className={`ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                  st.isFinishingStation
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-blue-100 text-blue-700"
+                                }`}
+                              >
+                                {st.isFinishingStation ? "Corte" : "Impresión"}
+                              </span>
+                              <span className="ml-auto text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1 border border-slate-200">
+                                <Clock className="w-2.5 h-2.5 text-slate-400" />{" "}
+                                {stDisplayTime}
+                              </span>
+                            </Button>
+                          );
+                        })
+                      ) : (
+                        <div className="text-[10px] text-amber-700 italic px-2 py-2 leading-relaxed border border-amber-200 bg-amber-50 rounded-md shadow-inner">
+                          Ninguna otra máquina es compatible con{" "}
+                          {getMaterialName(item.materialId)}.
+                        </div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
-            </PopoverContent>
-          </Popover>
-        )}
-      </div>
+            </div>
+          ) : (
+            <div className="w-full" onClick={(e) => e.stopPropagation()}>
+              <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`h-8 text-xs px-3 font-bold w-full shadow-sm ${
+                    isReady
+                      ? "bg-purple-50 border-purple-300 hover:bg-purple-100 text-purple-800"
+                      : "bg-white hover:bg-slate-50 border-slate-300 text-slate-700"
+                  }`}
+                >
+                  {isReady ? (
+                    <>
+                      <Package className="w-3.5 h-3.5 mr-1.5" /> Esperando Empaque
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRightLeft className="w-3.5 h-3.5 mr-1.5" /> Reasignar
+                      Trabajo
+                    </>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-64 p-2 bg-white shadow-2xl border border-slate-200 z-50 rounded-lg"
+                align="start"
+              >
+                <span className="text-xs font-bold text-slate-500 mb-2.5 block uppercase tracking-wider pl-1">
+                  {isReady ? "Corregir asignación:" : "Reasignar a:"}
+                </span>
+                <div className="flex flex-col gap-1.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="justify-start h-8 text-xs font-medium text-amber-700 hover:text-amber-800 hover:bg-amber-100 border border-transparent hover:border-amber-200"
+                    onClick={() =>
+                      onUpdate(item.id, {
+                        assignedToId: null,
+                        status: "PREIMPRESION",
+                      })
+                    }
+                  >
+                    Devolver a Espera / Preimpresión
+                  </Button>
+                  <div className="h-px bg-slate-100 my-0.5"></div>
+                  {compatibleStations.length > 0 ? (
+                    compatibleStations.map((st: any) => {
+                      const stItems =
+                        allPendingItems?.filter(
+                          (i: any) => i.assignedToId === st.id,
+                        ) || [];
+                      const stTotalML = stItems.reduce((sum: number, i: any) => {
+                        const ml =
+                          i.linearMeters > 0
+                            ? i.linearMeters
+                            : ((i.heightMm || 0) / 1000) * (i.copies || 1);
+                        return sum + ml;
+                      }, 0);
+                      const stSpeed = st.printSpeedPerHour || 10;
+                      const stRawHours = stSpeed > 0 ? stTotalML / stSpeed : 0;
+                      const stDisplayTime = formatHoursAndMinutes(stRawHours);
+
+                      return (
+                        <Button
+                          key={st.id}
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start h-8 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-100 border border-transparent flex w-full items-center"
+                          onClick={() =>
+                            onUpdate(item.id, {
+                              assignedToId: st.id,
+                              status: "EN_COLA",
+                            })
+                          }
+                        >
+                          <span className="truncate max-w-[120px]">
+                            {st.name}
+                          </span>
+                          <span
+                            className={`ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                              st.isFinishingStation
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-blue-100 text-blue-700"
+                            }`}
+                          >
+                            {st.isFinishingStation ? "Corte" : "Impresión"}
+                          </span>
+                          <span className="ml-auto text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1 border border-slate-200">
+                            <Clock className="w-2.5 h-2.5 text-slate-400" />{" "}
+                            {stDisplayTime}
+                          </span>
+                        </Button>
+                      );
+                    })
+                  ) : (
+                    <div className="text-[10px] text-amber-700 italic px-2 py-2 leading-relaxed border border-amber-200 bg-amber-50 rounded-md shadow-inner">
+                      Ninguna otra máquina es compatible con{" "}
+                      {getMaterialName(item.materialId)}.
+                    </div>
+                  )}
+                </div>
+              </PopoverContent>
+              </Popover>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
